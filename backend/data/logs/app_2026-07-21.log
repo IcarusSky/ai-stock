@@ -1,0 +1,108 @@
+2026-07-21 00:09:26.429 | INFO     | app.main:lifespan:56 - AI Stock 系统关闭...
+2026-07-21 00:09:26.431 | INFO     | app.main:lifespan:60 - AI Stock 系统关闭完成
+2026-07-21 00:09:30.616 | INFO     | app.main:lifespan:25 - AI Stock 系统启动...
+2026-07-21 00:09:34.708 | WARNING  | app.main:lifespan:32 - PostgreSQL 初始化失败: [WinError 1225] 远程计算机拒绝网络连接。
+2026-07-21 00:09:34.713 | INFO     | app.main:lifespan:36 - MongoDB 初始化完成
+2026-07-21 00:09:34.714 | INFO     | app.main:lifespan:42 - Redis 初始化完成
+2026-07-21 00:09:34.714 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 00:09:34.714 | INFO     | app.main:lifespan:48 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 00:09:34.718 | INFO     | app.main:lifespan:50 - AI Stock 系统启动完成!
+2026-07-21 00:09:34.718 | INFO     | app.main:lifespan:51 - API文档地址: http://localhost:8000/docs
+2026-07-21 00:09:42.824 | ERROR    | app.services.llm_service:analyze_news:57 - 新闻分析失败: Error code: 400 - {'error': {'message': 'invalid temperature: only 1 is allowed for this model', 'type': 'invalid_request_error'}}
+2026-07-21 00:14:05.013 | INFO     | app.main:lifespan:56 - AI Stock 系统关闭...
+2026-07-21 00:14:05.014 | INFO     | app.main:lifespan:60 - AI Stock 系统关闭完成
+2026-07-21 00:14:10.011 | INFO     | app.main:lifespan:25 - AI Stock 系统启动...
+2026-07-21 00:14:14.136 | WARNING  | app.main:lifespan:32 - PostgreSQL 初始化失败: [WinError 1225] 远程计算机拒绝网络连接。
+2026-07-21 00:14:14.141 | INFO     | app.main:lifespan:36 - MongoDB 初始化完成
+2026-07-21 00:14:14.141 | INFO     | app.main:lifespan:42 - Redis 初始化完成
+2026-07-21 00:14:14.141 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 00:14:14.141 | INFO     | app.main:lifespan:48 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 00:14:14.141 | INFO     | app.main:lifespan:50 - AI Stock 系统启动完成!
+2026-07-21 00:14:14.141 | INFO     | app.main:lifespan:51 - API文档地址: http://localhost:8000/docs
+2026-07-21 00:14:20.319 | ERROR    | app.services.llm_service:analyze_news:57 - 新闻分析失败: Error code: 400 - {'error': {'message': 'invalid temperature: only 1 is allowed for this model', 'type': 'invalid_request_error'}}
+2026-07-21 00:14:57.058 | INFO     | app.main:lifespan:56 - AI Stock 系统关闭...
+2026-07-21 00:14:57.058 | INFO     | app.main:lifespan:60 - AI Stock 系统关闭完成
+2026-07-21 00:17:44.082 | INFO     | app.main:lifespan:25 - AI Stock 系统启动...
+2026-07-21 00:17:48.181 | WARNING  | app.main:lifespan:32 - PostgreSQL 初始化失败: [WinError 1225] 远程计算机拒绝网络连接。
+2026-07-21 00:17:48.185 | INFO     | app.main:lifespan:36 - MongoDB 初始化完成
+2026-07-21 00:17:48.185 | INFO     | app.main:lifespan:42 - Redis 初始化完成
+2026-07-21 00:17:48.185 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 00:17:48.187 | INFO     | app.main:lifespan:48 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 00:17:48.187 | INFO     | app.main:lifespan:50 - AI Stock 系统启动完成!
+2026-07-21 00:17:48.187 | INFO     | app.main:lifespan:51 - API文档地址: http://localhost:8000/docs
+2026-07-21 00:23:10.490 | INFO     | app.main:lifespan:25 - AI Stock 系统启动...
+2026-07-21 00:23:14.561 | WARNING  | app.main:lifespan:32 - PostgreSQL 初始化失败: [WinError 1225] 远程计算机拒绝网络连接。
+2026-07-21 00:23:14.568 | INFO     | app.main:lifespan:36 - MongoDB 初始化完成
+2026-07-21 00:23:14.568 | INFO     | app.main:lifespan:42 - Redis 初始化完成
+2026-07-21 00:23:14.569 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 00:23:14.569 | INFO     | app.main:lifespan:48 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 00:23:14.569 | INFO     | app.main:lifespan:50 - AI Stock 系统启动完成!
+2026-07-21 00:23:14.569 | INFO     | app.main:lifespan:51 - API文档地址: http://localhost:8000/docs
+2026-07-21 00:25:08.821 | INFO     | app.main:lifespan:56 - AI Stock 系统关闭...
+2026-07-21 00:25:08.821 | INFO     | app.main:lifespan:60 - AI Stock 系统关闭完成
+2026-07-21 00:31:52.730 | INFO     | app.main:lifespan:25 - AI Stock 系统启动...
+2026-07-21 00:31:56.813 | WARNING  | app.main:lifespan:32 - PostgreSQL 初始化失败: [WinError 1225] 远程计算机拒绝网络连接。
+2026-07-21 00:31:56.820 | INFO     | app.main:lifespan:36 - MongoDB 初始化完成
+2026-07-21 00:31:56.820 | INFO     | app.main:lifespan:42 - Redis 初始化完成
+2026-07-21 00:31:56.820 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 00:31:56.820 | INFO     | app.main:lifespan:48 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 00:31:56.820 | INFO     | app.main:lifespan:50 - AI Stock 系统启动完成!
+2026-07-21 00:31:56.820 | INFO     | app.main:lifespan:51 - API文档地址: http://localhost:8000/docs
+2026-07-21 00:34:06.664 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[tencent]获取 000001 失败: tencent 通道不支持K线
+2026-07-21 00:34:07.748 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[eastmoney]获取 000001 失败: akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=0.000001&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:07.748 | WARNING  | app.services.market_data_service:get_kline_data:81 - 真实K线获取失败(000001)，回退模拟数据: 所有K线通道均失败(000001): akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=0.000001&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:07.749 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[tencent]获取 600036 失败: tencent 通道不支持K线
+2026-07-21 00:34:08.235 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[eastmoney]获取 600036 失败: akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600036&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:08.236 | WARNING  | app.services.market_data_service:get_kline_data:81 - 真实K线获取失败(600036)，回退模拟数据: 所有K线通道均失败(600036): akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600036&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:08.237 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[tencent]获取 600519 失败: tencent 通道不支持K线
+2026-07-21 00:34:08.709 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[eastmoney]获取 600519 失败: akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600519&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:08.709 | WARNING  | app.services.market_data_service:get_kline_data:81 - 真实K线获取失败(600519)，回退模拟数据: 所有K线通道均失败(600519): akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600519&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:08.710 | INFO     | app.services.backtest_service:run_backtest:54 - 开始回测任务 eac48c54-f40
+2026-07-21 00:34:08.712 | INFO     | app.services.backtest_service:run_backtest:141 - 回测任务 eac48c54-f40 完成，最终资金: 100000.00
+2026-07-21 00:34:37.954 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[tencent]获取 000001 失败: tencent 通道不支持K线
+2026-07-21 00:34:38.459 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[eastmoney]获取 000001 失败: akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=0.000001&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:38.459 | WARNING  | app.services.market_data_service:get_kline_data:81 - 真实K线获取失败(000001)，回退模拟数据: 所有K线通道均失败(000001): akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=0.000001&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:38.460 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[tencent]获取 600036 失败: tencent 通道不支持K线
+2026-07-21 00:34:38.921 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[eastmoney]获取 600036 失败: akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600036&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:38.921 | WARNING  | app.services.market_data_service:get_kline_data:81 - 真实K线获取失败(600036)，回退模拟数据: 所有K线通道均失败(600036): akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600036&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:38.922 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[tencent]获取 600519 失败: tencent 通道不支持K线
+2026-07-21 00:34:39.400 | WARNING  | app.services.datasource.router:get_kline:136 - K线通道[eastmoney]获取 600519 失败: akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600519&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:39.400 | WARNING  | app.services.market_data_service:get_kline_data:81 - 真实K线获取失败(600519)，回退模拟数据: 所有K线通道均失败(600519): akshare K线获取失败: HTTPSConnectionPool(host='push2his.eastmoney.com', port=443): Max retries exceeded with url: /api/qt/stock/kline/get?fields1=f1%2Cf2%2Cf3%2Cf4%2Cf5%2Cf6&fields2=f51%2Cf52%2Cf53%2Cf54%2Cf55%2Cf56%2Cf57%2Cf58%2Cf59%2Cf60%2Cf61%2Cf116&ut=7eea3edcaed734bea9cbfc24409ed989&klt=101&fqt=1&secid=1.600519&beg=19900101&end=20260721 (Caused by ProxyError('Unable to connect to proxy', RemoteDisconnected('Remote end closed connection without response')))
+2026-07-21 00:34:39.401 | INFO     | app.services.backtest_service:run_backtest:54 - 开始回测任务 43200b41-7fc
+2026-07-21 00:34:39.402 | INFO     | app.services.backtest_service:run_backtest:141 - 回测任务 43200b41-7fc 完成，最终资金: 100000.00
+2026-07-21 02:07:20.419 | INFO     | app.main:lifespan:26 - AI Stock 系统启动...
+2026-07-21 02:07:20.466 | INFO     | app.main:lifespan:31 - PostgreSQL 初始化完成
+2026-07-21 02:07:20.473 | INFO     | app.main:lifespan:37 - MongoDB 初始化完成
+2026-07-21 02:07:20.473 | INFO     | app.main:lifespan:43 - Redis 初始化完成
+2026-07-21 02:07:20.473 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 02:07:20.473 | INFO     | app.main:lifespan:49 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 02:07:20.473 | WARNING  | app.main:lifespan:56 - 鼓掌财经客户端启动失败: name 'asyncio' is not defined
+2026-07-21 02:07:20.474 | INFO     | app.main:lifespan:58 - AI Stock 系统启动完成!
+2026-07-21 02:07:20.474 | INFO     | app.main:lifespan:59 - API文档地址: http://localhost:8000/docs
+2026-07-21 02:07:20.474 | INFO     | app.main:lifespan:64 - AI Stock 系统关闭...
+2026-07-21 02:07:20.477 | INFO     | app.services.guzhang_client:stop:83 - 鼓掌财经客户端已停止
+2026-07-21 02:07:20.477 | INFO     | app.main:lifespan:70 - 鼓掌财经客户端已关闭
+2026-07-21 02:07:20.477 | INFO     | app.main:lifespan:73 - AI Stock 系统关闭完成
+2026-07-21 02:07:40.636 | INFO     | app.main:lifespan:27 - AI Stock 系统启动...
+2026-07-21 02:07:40.669 | INFO     | app.main:lifespan:32 - PostgreSQL 初始化完成
+2026-07-21 02:07:40.673 | INFO     | app.main:lifespan:38 - MongoDB 初始化完成
+2026-07-21 02:07:40.673 | INFO     | app.main:lifespan:44 - Redis 初始化完成
+2026-07-21 02:07:40.673 | INFO     | app.core.order_executor:initialize:40 - 初始化账户，初始资金: 100000.0
+2026-07-21 02:07:40.674 | INFO     | app.main:lifespan:50 - 模拟交易账户初始化完成，初始资金: 100000.0
+2026-07-21 02:07:40.674 | INFO     | app.main:lifespan:55 - 鼓掌财经客户端启动任务已创建
+2026-07-21 02:07:40.674 | INFO     | app.main:lifespan:59 - AI Stock 系统启动完成!
+2026-07-21 02:07:40.674 | INFO     | app.main:lifespan:60 - API文档地址: http://localhost:8000/docs
+2026-07-21 02:07:40.674 | INFO     | app.services.guzhang_client:start:62 - 鼓掌财经客户端已启动
+2026-07-21 02:07:42.635 | INFO     | app.services.guzhang_client:_fetch_token:129 - 成功提取鼓掌财经 encryptedToken: eyJyb2xlIjoic3Vi...
+2026-07-21 02:07:42.637 | INFO     | app.services.guzhang_client:_run_loop:95 - 正在连接鼓掌财经 WebSocket...
+2026-07-21 02:07:42.927 | INFO     | app.services.guzhang_client:_run_loop:97 - 鼓掌财经 WebSocket 连接成功
+2026-07-21 02:07:48.578 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:07:56.871 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:08:05.173 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:08:26.867 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:09:00.544 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:09:00.545 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:09:00.549 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:09:00.550 | INFO     | app.services.news_service:fetch_realtime_news:28 - 返回 1 条鼓掌财经实时快讯
+2026-07-21 02:29:38.897 | INFO     | app.services.guzhang_client:_handle_message:183 - 已累计接收 20 条鼓掌快讯
+2026-07-21 02:43:38.615 | INFO     | app.services.guzhang_client:_handle_message:183 - 已累计接收 40 条鼓掌快讯

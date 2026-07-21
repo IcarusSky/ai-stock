@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+node_modules/
+dist/
+data/logs/
+.pytest_cache/
+.tools/
+.idea/
+.vscode/

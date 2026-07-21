@@ -1,0 +1,147 @@
+"""
+AI Stock - 主应用入口
+"""
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
+import asyncio
+import sys
+
+from app.core.config import settings
+from app.models.database import (
+    init_postgres, close_postgres,
+    init_mongodb, close_mongodb,
+    init_redis, close_redis
+)
+from app.core.order_executor import order_executor
+from app.services.guzhang_client import guzhang_client
+
+from app.api import market, portfolio, strategy, order, backtest, news, llm, feishu, datasource, company
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """应用生命周期管理"""
+    # 启动
+    logger.info("AI Stock 系统启动...")
+
+    # 初始化数据库
+    try:
+        await init_postgres()
+        logger.info("PostgreSQL 初始化完成")
+    except Exception as e:
+        logger.warning(f"PostgreSQL 初始化失败: {e}")
+
+    try:
+        await init_mongodb()
+        logger.info("MongoDB 初始化完成")
+    except Exception as e:
+        logger.warning(f"MongoDB 初始化失败: {e}")
+
+    try:
+        await init_redis()
+        logger.info("Redis 初始化完成")
+    except Exception as e:
+        logger.warning(f"Redis 初始化失败: {e}")
+
+    # 初始化模拟账户
+    await order_executor.initialize(initial_capital=100000.0)
+    logger.info("模拟交易账户初始化完成，初始资金: 100000.0")
+
+    # 启动鼓掌财经实时快讯客户端
+    try:
+        asyncio.create_task(guzhang_client.start())
+        logger.info("鼓掌财经客户端启动任务已创建")
+    except Exception as e:
+        logger.warning(f"鼓掌财经客户端启动失败: {e}")
+
+    logger.info("AI Stock 系统启动完成!")
+    logger.info(f"API文档地址: http://localhost:8000/docs")
+
+    yield
+
+    # 关闭
+    logger.info("AI Stock 系统关闭...")
+    await close_postgres()
+    await close_mongodb()
+    await close_redis()
+    try:
+        await guzhang_client.stop()
+        logger.info("鼓掌财经客户端已关闭")
+    except Exception as e:
+        logger.warning(f"鼓掌财经客户端关闭异常: {e}")
+    logger.info("AI Stock 系统关闭完成")
+
+
+# 创建应用
+app = FastAPI(
+    title="AI Stock Trading System",
+    description="""
+    AI量化交易系统API
+
+    ## 功能模块
+    - **行情服务**: 实时股票行情、K线数据、市场情绪
+    - **策略引擎**: 多策略支持、信号生成、每日推荐
+    - **订单执行**: 模拟/实盘交易下单
+    - **回测服务**: 策略回测、指标分析、参数优化
+    - **新闻分析**: 实时新闻、舆情分析、买点判断
+    - **LLM服务**: 自然语言策略生成
+    - **飞书推送**: 交易信号推送、风险预警
+    """,
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS配置
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# 注册路由
+app.include_router(market.router, prefix="/api")
+app.include_router(portfolio.router, prefix="/api")
+app.include_router(strategy.router, prefix="/api")
+app.include_router(order.router, prefix="/api")
+app.include_router(backtest.router, prefix="/api")
+app.include_router(news.router, prefix="/api")
+app.include_router(llm.router, prefix="/api")
+app.include_router(feishu.router, prefix="/api")
+app.include_router(datasource.router, prefix="/api")
+app.include_router(company.router, prefix="/api")
+
+
+@app.get("/")
+async def root():
+    """根路径"""
+    return {
+        "name": "AI Stock Trading System",
+        "version": "1.0.0",
+        "docs": "/docs",
+        "status": "running"
+    }
+
+
+@app.get("/health")
+async def health_check():
+    """健康检查"""
+    return {"status": "healthy"}
+
+
+# 配置日志
+logger.remove()
+logger.add(
+    sys.stderr,
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
+    level="INFO"
+)
+logger.add(
+    "data/logs/app_{time:YYYY-MM-DD}.log",
+    rotation="00:00",
+    retention="30 days",
+    level="DEBUG"
+)
