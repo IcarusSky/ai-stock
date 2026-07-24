@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Card, Row, Col, Statistic, Table, Button, Space, Typography, Form, Select, Input, DatePicker, Tag, Progress, Modal, message } from 'antd'
-import { ExperimentOutlined, PlayCircleOutlined, DiffOutlined } from '@ant-design/icons'
+import { PlayCircleOutlined, DiffOutlined } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { ColumnsType } from 'antd/es/table'
 import { backtestApi } from '../services/api'
 import dayjs from 'dayjs'
 
-const { Title, Text } = Typography
+const { Title } = Typography
 const { RangePicker } = DatePicker
 
 interface BacktestResult {
@@ -22,10 +22,14 @@ interface BacktestResult {
 export default function Backtest() {
   const [form] = Form.useForm()
   const [running, setRunning] = useState(false)
-  const [taskId, setTaskId] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [results, setResults] = useState<BacktestResult[]>([])
   const [compareModalVisible, setCompareModalVisible] = useState(false)
+  const [detailModalVisible, setDetailModalVisible] = useState(false)
+  const [optimizeModalVisible, setOptimizeModalVisible] = useState(false)
+  const [selectedResult, setSelectedResult] = useState<BacktestResult | null>(null)
+  const [optimizing, setOptimizing] = useState(false)
+  const [optimizeResult, setOptimizeResult] = useState<any>(null)
 
   const runBacktest = async () => {
     const values = form.getFieldsValue()
@@ -44,7 +48,7 @@ export default function Backtest() {
         initial_capital: values.initial_capital || 100000
       })
 
-      setTaskId(res.data.task_id)
+      const newTaskId = res.data.task_id
       // 模拟进度
       let p = 0
       const timer = setInterval(() => {
@@ -55,7 +59,7 @@ export default function Backtest() {
           setRunning(false)
           // 添加结果
           setResults(prev => [...prev, {
-            task_id: res.data.task_id,
+            task_id: newTaskId,
             strategy_name: values.strategy_id === 'strategy_001' ? '趋势跟踪策略' : '均值回归策略',
             total_return: 0.12 + Math.random() * 0.1,
             sharpe_ratio: 1.2 + Math.random() * 0.8,
@@ -102,10 +106,14 @@ export default function Backtest() {
     {
       title: '操作',
       key: 'action',
-      render: () => (
+      render: (_, record) => (
         <Space>
-          <Button size="small">详情</Button>
-          <Button size="small">优化</Button>
+          <Button size="small" type="link" onClick={() => { setSelectedResult(record); setDetailModalVisible(true); }}>
+            详情
+          </Button>
+          <Button size="small" type="link" onClick={() => { setSelectedResult(record); setOptimizeResult(null); setOptimizeModalVisible(true); }}>
+            优化
+          </Button>
         </Space>
       )
     }
@@ -218,6 +226,65 @@ export default function Backtest() {
           rowKey="task_id"
           pagination={false}
         />
+      </Modal>
+
+      {/* 回测详情弹窗 */}
+      <Modal title="回测详情" open={detailModalVisible} onCancel={() => setDetailModalVisible(false)} footer={null} width={600}>
+        {selectedResult && (
+          <Table
+            columns={[
+              { title: '指标', dataIndex: 'label', key: 'label' },
+              { title: '值', dataIndex: 'value', key: 'value' },
+            ]}
+            dataSource={[
+              { key: 'strategy', label: '策略', value: selectedResult.strategy_name },
+              { key: 'task_id', label: '任务ID', value: selectedResult.task_id },
+              { key: 'total_return', label: '总收益率', value: `${(selectedResult.total_return * 100).toFixed(2)}%` },
+              { key: 'sharpe_ratio', label: '夏普比率', value: selectedResult.sharpe_ratio.toFixed(2) },
+              { key: 'max_drawdown', label: '最大回撤', value: `${(selectedResult.max_drawdown * 100).toFixed(2)}%` },
+              { key: 'win_rate', label: '胜率', value: `${(selectedResult.win_rate * 100).toFixed(1)}%` },
+              { key: 'total_trades', label: '交易次数', value: selectedResult.total_trades },
+            ]}
+            pagination={false}
+            size="small"
+          />
+        )}
+      </Modal>
+
+      {/* 参数优化弹窗 */}
+      <Modal
+        title="参数优化"
+        open={optimizeModalVisible}
+        onCancel={() => setOptimizeModalVisible(false)}
+        footer={null}
+      >
+        <Form
+          layout="vertical"
+          onFinish={async (values) => {
+            if (!selectedResult) return
+            setOptimizing(true)
+            try {
+              const res = await backtestApi.optimize(selectedResult.task_id, values.param_name || 'default')
+              setOptimizeResult(res.data)
+              message.success('优化完成')
+            } catch (error) {
+              message.error('优化失败')
+            } finally {
+              setOptimizing(false)
+            }
+          }}
+        >
+          <Form.Item name="param_name" label="优化参数名" rules={[{ required: true }]}>
+            <Input placeholder="例如：period, threshold" />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={optimizing}>开始优化</Button>
+        </Form>
+        {optimizeResult && (
+          <div style={{ marginTop: 16 }}>
+            <Tag color="green">优化结果</Tag>
+            <pre>{JSON.stringify(optimizeResult, null, 2)}</pre>
+          </div>
+        )}
       </Modal>
     </div>
   )

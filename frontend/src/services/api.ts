@@ -18,6 +18,7 @@ export const marketApi = {
   getKline: (code: string, period = 'daily') => api.get(`/market/kline/${code}?period=${period}`),
   getSentiment: () => api.get('/market/sentiment'),
   getWatchlist: () => api.get('/market/watchlist'),
+  addToWatchlist: (code: string) => api.post('/market/watchlist', { code }),
 }
 
 // 持仓API
@@ -57,6 +58,14 @@ export const backtestApi = {
     api.get(`/backtest/compare?strategy_ids=${strategyIds.join(',')}&start_date=${startDate}&end_date=${endDate}`, { timeout: LLM_TIMEOUT }),
   optimize: (strategyId: string, paramName: string) =>
     api.post('/backtest/optimize', { strategy_id: strategyId, param_name: paramName }, { timeout: LLM_TIMEOUT }),
+}
+
+// Settings API（后端待实现）
+export const settingsApi = {
+  saveBroker: (config: Record<string, unknown>) =>
+    api.post('/settings/broker', config),
+  saveRisk: (config: Record<string, unknown>) =>
+    api.post('/settings/risk', config),
 }
 
 // 新闻API

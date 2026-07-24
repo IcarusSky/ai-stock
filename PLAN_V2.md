@@ -238,3 +238,140 @@ class GuzhangClient:
 - [README.md](./README.md) — 项目说明
 - [SPEC.md](./SPEC.md) — 规格说明（待查）
 - [DESIGN.md](./DESIGN.md) — 设计文档（待查）
+
+---
+
+## 十一、18080 对标产品深度分析（"小宇量化 JZhu Trading" v2.1.4）
+
+> 侦察时间：2026-07-21
+> 方法：JS Bundle 分析 + API 探测 + 云端版本查询
+> 产物：`.explore/BENCHMARK_REPORT.md`
+
+### 产品定位
+
+"小宇量化"是一款面向个人投资者的**一站式量化工具**，Docker 单容器 + 浏览器访问 localhost:18080。覆盖**选股→策略→回测→信号→推送**全链路，云端同步 cloud.jzhu.net。
+
+### 技术栈
+
+- 前端：React + TypeScript + **ECharts** + Ant Design（推测）
+- 后端：Python FastAPI（Docker 内）
+- 数据源：iFinD + 东方财富（主力资金、龙虎榜特征明显）
+
+### 核心功能矩阵（我方缺失清单）
+
+| 路由 | 功能 | GAP |
+|------|------|-----|
+| `/kline` | K线图+技术指标+分时图 | 🔴 重大缺口 |
+| `/watchlist/groups` | 自选股多分组管理 | 🔴 重大缺口 |
+| `/moneyflow/preload/start` | 主力资金流日/3日/5日排名 | 🔴 重大缺口 |
+| `/patterns/scan-all` | 技术形态扫描（均线多头/金叉等） | 🔴 重大缺口 |
+| `/lhb/day` | 龙虎榜全链路 | 🔴 重大缺口 |
+| `/backtest-history` | 回测历史持久化 | 🟡 中等缺口 |
+| `/strategies/ai/verify-roundtrip` | AI策略生成→验证回测闭环 | 🟡 中等缺口 |
+| `/monitor/signals` | 信号监控台（盯盘列表+已读） | 🟡 中等缺口 |
+| `/monitor/webhook` | 通用 WebHook | 🟡 中等缺口 |
+
+### 推荐实施路线图
+
+```
+第一阶段（数据驱动，立即可做）：
+  1. 主力资金流模块（akshare 免费可用）
+  2. 龙虎榜模块（akshare 免费可用）
+  3. 形态扫描基础版（akshare 技术指标可用）
+
+第二阶段（体验补齐）：
+  4. K线/分时图（ECharts + akshare 历史K线）
+  5. 自选股分组管理（PostgreSQL）
+  6. 回测历史持久化
+  7. 信号监控台
+
+第三阶段（差异化）：
+  8. AI策略验证闭环
+  9. 通用 WebHook + PushPlus
+  10. 策略广场/社区
+```
+
+### 参考 API（可直接研究复用）
+
+```javascript
+// 小宇量化前端直接调用的后端接口
+POST /backtest/run                    // 发起回测
+GET  /backtest-history               // 历史回测
+POST /strategies/ai/generate         // 本地AI生成
+POST /strategies/ai/verify-roundtrip // 策略验证
+POST /patterns/scan-all               // 形态扫描
+POST /scan/start                     // 条件选股
+POST /moneyflow/preload/start         // 资金流预计算
+GET  /lhb/day                        // 龙虎榜
+GET  /lhb/by-code?code=xxx           // 按个股查龙虎榜
+GET  /watchlist/groups               // 自选分组
+GET  /monitor/signals                // 信号列表
+POST /monitor/webhook                // WebHook配置
+POST /monitor/pushplus               // PushPlus配置
+```
+
+---
+
+## 十二、本轮实施日志（2026-07-22）
+
+### 阶段 A 完成情况
+
+| Agent | 任务 | 状态 | 产出 |
+|-------|------|------|------|
+| A1 | 鼓掌财经协议逆向 | ✅ | token 缓存10min + 指数退避 + 消息去重 + `news_ingest_service.py` + WS广播 |
+| A2 | 前端按钮全量排查 | ✅ | `.research/button_api_mapping.md` — 13个缺口 + 28个孤悬接口 |
+| A3 | akshare 接口能力评估 | ✅ | `.research/akshare_assessment.md` — 5个接口全通，支持HTTPS |
+| A4 | 18080 探索 + 对标实施 | ✅ | `moneyflow.py` + `lhb.py` + `patterns.py` + `tencent_ws_client.py` + `monitor.py` |
+
+### 阶段 B 进行中
+
+| Agent | 任务 | 预计产出 |
+|--------|------|---------|
+| B1 | 股票池后端 | `stock_pool.py` model + `stock_pool_sync_service.py` + 8个API |
+| B2 | 前端按钮修复 | Strategy/Backtest/Settings/Dashboard 缺口全部补齐 |
+
+### 已落地的代码文件
+
+```
+backend/app/
+├── api/
+│   ├── monitor.py          # 信号监控台 CRUD（新增）
+│   ├── moneyflow.py        # 主力资金流 API（新增）
+│   ├── lhb.py              # 龙虎榜 API（新增）
+│   ├── patterns.py         # 形态扫描 API（新增）
+│   └── main.py             # 注册以上所有路由（修改）
+├── services/
+│   ├── datasource/
+│   │   └── tencent_ws_client.py  # 腾讯财经 WebSocket（新增）
+│   ├── guzhang_client.py         # 增强：token缓存+退避+去重（修改）
+│   └── news_ingest_service.py    # 新闻 ingest 服务（新增）
+└── models/
+    └── stock_pool.py       # 股票池数据模型（阶段B新增，备用路径）
+
+frontend/src/
+├── services/api.ts         # 补缺失 API 定义（修改）
+├── pages/Strategy.tsx      # 查看/编辑/删除按钮接线（阶段B）
+├── pages/Backtest.tsx      # 详情/优化/对比按钮接线（阶段B）
+├── pages/Settings.tsx      # 券商/风控配置保存（阶段B）
+└── pages/Dashboard.tsx      # 添加自选按钮（阶段B）
+
+.research/
+├── button_api_mapping.md   # 按钮-接口对照表
+└── akshare_assessment.md   # akshare 接口能力评估
+
+.explore/
+├── BENCHMARK_REPORT.md     # 18080 对标产品功能矩阵
+└── （截图和JS bundle）
+
+.test_guzhang.py            # 鼓掌财经连接测试脚本
+.test_tx_ws.py              # 腾讯WS测试脚本
+```
+
+### akshare 接口评估结论
+
+- 主力资金流：全量5540条，HTTPS，~10s，✅
+- 行业板块：991个，HTTPS，~2s，✅
+- 概念板块：800+个，HTTPS，~2s，✅
+- 龙虎榜：每日50-200条，HTTPS，<1s，✅
+- 全市场股票：5540条，HTTPS，~10s，✅
+- **注意**：部分接口只用HTTPS不用HTTP

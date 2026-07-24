@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react'
 import {
   Row, Col, Card, Statistic, Table, Tag, Space, Button, Modal, Form, Input,
-  Select, InputNumber, message, Alert, Typography, Progress, Tooltip, Divider
+  InputNumber, message, Alert, Typography
 } from 'antd'
 import {
   RiseOutlined, FallOutlined, DollarOutlined, BankOutlined,
-  ThunderboltOutlined, AlertOutlined, PlusOutlined, SyncOutlined
+  AlertOutlined, PlusOutlined, SyncOutlined
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
 import type { ColumnsType } from 'antd/es/table'
-import { marketApi, portfolioApi, strategyApi, orderApi } from '../services/api'
+import { marketApi, portfolioApi, orderApi } from '../services/api'
 
 const { Title, Text } = Typography
 
@@ -31,20 +31,9 @@ interface Quote {
   change_pct: number
 }
 
-interface Signal {
-  strategy_id: string
-  strategy_name: string
-  stock_code: string
-  signal: 'BUY' | 'SELL' | 'HOLD'
-  confidence: number
-  price: number
-  reason: string
-}
-
 export default function Dashboard() {
   const [positions, setPositions] = useState<Position[]>([])
   const [quotes, setQuotes] = useState<Record<string, Quote>>({})
-  const [signals, setSignals] = useState<Signal[]>([])
   const [watchlist, setWatchlist] = useState<any[]>([])
   const [account, setAccount] = useState<any>({})
   const [capitalCurve, setCapitalCurve] = useState<any[]>([])
@@ -52,16 +41,17 @@ export default function Dashboard() {
   const [orderForm] = Form.useForm()
   const [selectedStock, setSelectedStock] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [addWatchModalVisible, setAddWatchModalVisible] = useState(false)
+  const [watchCode, setWatchCode] = useState('')
 
   // 加载数据
   const loadData = async () => {
     try {
-      const [positionsRes, watchlistRes, accountRes, curveRes, sentimentRes] = await Promise.all([
+      const [positionsRes, watchlistRes, accountRes, curveRes] = await Promise.all([
         portfolioApi.getPositions(),
         marketApi.getWatchlist(),
         portfolioApi.getAccount(),
         portfolioApi.getCapitalCurve(30),
-        marketApi.getSentiment()
       ])
 
       setPositions(positionsRes.data)
@@ -149,6 +139,22 @@ export default function Dashboard() {
       quantity: 100
     })
     setOrderModalVisible(true)
+  }
+
+  const handleAddWatchlist = async () => {
+    if (!watchCode.trim()) {
+      message.warning('请输入股票代码')
+      return
+    }
+    try {
+      await marketApi.addToWatchlist(watchCode.trim())
+      message.success(`已添加 ${watchCode} 到自选`)
+      setAddWatchModalVisible(false)
+      setWatchCode('')
+      loadData()
+    } catch (error) {
+      message.error('添加失败，请检查股票代码')
+    }
   }
 
   const columns: ColumnsType<Position> = [
@@ -297,7 +303,7 @@ export default function Dashboard() {
           </Card>
         </Col>
         <Col span={12}>
-          <Card title="重点关注" extra={<Button icon={<PlusOutlined />} type="link">添加自选</Button>}>
+          <Card title="重点关注" extra={<Button icon={<PlusOutlined />} type="link" onClick={() => setAddWatchModalVisible(true)}>添加自选</Button>}>
             <Table
               columns={watchlistColumns}
               dataSource={watchlist}
@@ -359,6 +365,24 @@ export default function Dashboard() {
             <Button onClick={() => setOrderModalVisible(false)}>取消</Button>
           </Space>
         </Form>
+      </Modal>
+
+      {/* 添加自选弹窗 */}
+      <Modal
+        title="添加自选"
+        open={addWatchModalVisible}
+        onCancel={() => { setAddWatchModalVisible(false); setWatchCode(''); }}
+        footer={null}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Input
+            placeholder="请输入股票代码，如 000001"
+            value={watchCode}
+            onChange={e => setWatchCode(e.target.value)}
+            onPressEnter={handleAddWatchlist}
+          />
+          <Button type="primary" onClick={handleAddWatchlist} block>确认添加</Button>
+        </Space>
       </Modal>
     </div>
   )

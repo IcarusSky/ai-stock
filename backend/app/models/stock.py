@@ -16,7 +16,7 @@ from sqlalchemy import (
     Text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.database import Base
 
@@ -115,3 +115,11 @@ class StockPoolItem(Base):
     stock_code: Mapped[str] = mapped_column(String(10), primary_key=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # 关联到 StockBasic（用于 selectinload 预加载）
+    stock: Mapped[Optional["StockBasic"]] = relationship(
+        "StockBasic",
+        primaryjoin="StockPoolItem.stock_code==foreign(StockBasic.code)",
+        lazy="selectin",
+        default=None,
+    )

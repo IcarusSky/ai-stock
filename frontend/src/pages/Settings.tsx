@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Card, Form, Input, Button, Switch, Space, message, Typography, Tag, Alert } from 'antd'
 import { SaveOutlined, ApiOutlined, BellOutlined, LockOutlined, DatabaseOutlined } from '@ant-design/icons'
-import { feishuApi, dataSourceApi } from '../services/api'
+import { feishuApi, dataSourceApi, settingsApi } from '../services/api'
 
 const { Title, Text } = Typography
 
@@ -76,12 +76,24 @@ export default function Settings() {
     }
   }
 
-  const saveBroker = () => {
-    message.success('券商设置已保存')
+  const saveBroker = async () => {
+    const values = brokerForm.getFieldsValue()
+    try {
+      await settingsApi.saveBroker(values)
+      message.success('券商配置已保存')
+    } catch (error) {
+      message.error('保存失败')
+    }
   }
 
-  const saveRisk = () => {
-    message.success('风控设置已保存')
+  const saveRisk = async () => {
+    const values = riskForm.getFieldsValue()
+    try {
+      await settingsApi.saveRisk(values)
+      message.success('风控设置已保存')
+    } catch (error) {
+      message.error('保存失败')
+    }
   }
 
   return (

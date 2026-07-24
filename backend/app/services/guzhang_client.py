@@ -18,8 +18,15 @@ from app.schemas.news import NewsItem
 GUZHANG_APP_URL = "https://724.guzhang.com/app/"
 GUZHANG_WS_URL_TEMPLATE = "wss://swoole2.guzhang.com:443/?token={token}"
 
+# Token 缓存有效期（秒），避免频繁抓取
+TOKEN_CACHE_TTL: float = 600.0  # 10 分钟
+
 BULLISH_KEYWORDS = {"涨停", "大涨", "利好", "预增", "中标", "获批", "突破", "创新高"}
 BEARISH_KEYWORDS = {"跌停", "大跌", "利空", "预减", "处罚", "违规", "风险", "创新低"}
+
+# 重连参数
+RECONNECT_BASE_DELAY: float = 5.0   # 初始等待秒数
+RECONNECT_MAX_DELAY: float = 60.0  # 最大等待秒数
 
 # categoryId -> 中文分类映射（用于日志展示）
 CATEGORY_NAMES: Dict[int, str] = {
@@ -47,9 +54,13 @@ class GuzhangClient:
         self._subscribers: Set[asyncio.Queue] = set()
         self._running: bool = False
         self._ws_task: Optional[asyncio.Task] = None
-        self._reconnect_delay: float = 1.0
         self._received_count: int = 0
         self._lock = asyncio.Lock()
+        # Token 缓存
+        self._token: Optional[str] = None
+        self._token_fetched_at: float = 0.0
+        # 已处理消息 id（去重）
+        self._seen_ids: Set[str] = set()
 
     async def start(self) -> None:
         """启动客户端（幂等）。"""
@@ -83,19 +94,20 @@ class GuzhangClient:
         logger.info("鼓掌财经客户端已停止")
 
     async def _run_loop(self) -> None:
-        """核心运行循环：抓 token -> 建连 -> 接收 -> 断线重连。"""
+        """核心运行循环：抓 token -> 建连 -> 接收 -> 断线重连（指数退避）。"""
+        attempt: int = 0
         while True:
             async with self._lock:
                 if not self._running:
                     break
 
             try:
-                token = await self._fetch_token()
+                token = await self._get_token()
                 ws_url = GUZHANG_WS_URL_TEMPLATE.format(token=token)
                 logger.info("正在连接鼓掌财经 WebSocket...")
                 async with websockets.connect(ws_url, ping_interval=None, close_timeout=10) as ws:
                     logger.info("鼓掌财经 WebSocket 连接成功")
-                    self._reconnect_delay = 1.0
+                    attempt = 0  # 重置重试计数
                     await self._receive_loop(ws)
             except asyncio.CancelledError:
                 logger.info("鼓掌财经运行循环已取消")
@@ -103,16 +115,25 @@ class GuzhangClient:
             except Exception as e:
                 logger.warning(f"鼓掌财经 WebSocket 异常: {e}")
 
-            # 断线后等待重连
+            # 指数退避重连
             async with self._lock:
                 if not self._running:
                     break
-            delay = min(self._reconnect_delay, 60.0)
-            self._reconnect_delay *= 2
-            logger.info(f"{delay}秒后尝试重连鼓掌财经...")
+            attempt += 1
+            delay = min(RECONNECT_BASE_DELAY * (2 ** (attempt - 1)), RECONNECT_MAX_DELAY)
+            logger.info(f"第 {attempt} 次重连，{delay:.1f} 秒后尝试...")
             await asyncio.sleep(delay)
 
         logger.info("鼓掌财经运行循环已退出")
+
+    async def _get_token(self) -> str:
+        """返回缓存的 token（10 分钟有效），过期则重新抓取。"""
+        now = asyncio.get_event_loop().time()
+        if self._token and (now - self._token_fetched_at) < TOKEN_CACHE_TTL:
+            return self._token
+        self._token = await self._fetch_token()
+        self._token_fetched_at = now
+        return self._token
 
     async def _fetch_token(self) -> str:
         """抓取鼓掌财经 APP 页面，提取 encryptedToken。"""
@@ -158,8 +179,18 @@ class GuzhangClient:
 
     async def _handle_message(self, data: Dict[str, Any]) -> None:
         """处理单条业务消息。"""
+        aid = data.get("aid")
         title = data.get("title", "")
         comefrom = data.get("comefrom", "")
+
+        # 去重：跳过已处理过的 aid
+        if aid:
+            if aid in self._seen_ids:
+                return
+            self._seen_ids.add(str(aid))
+            # 防止 seen_ids 无限膨胀
+            if len(self._seen_ids) > 10000:
+                self._seen_ids = set(list(self._seen_ids)[-5000:])
 
         # 控制消息
         if title == "refresh" and comefrom == "鼓掌网":

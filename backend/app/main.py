@@ -16,8 +16,10 @@ from app.models.database import (
 )
 from app.core.order_executor import order_executor
 from app.services.guzhang_client import guzhang_client
+from app.services.news_ingest_service import news_ingest_service
+from app.api import news as news_api_module
 
-from app.api import market, portfolio, strategy, order, backtest, news, llm, feishu, datasource, company
+from app.api import market, portfolio, strategy, order, backtest, news, llm, feishu, datasource, company, monitor, moneyflow, lhb, patterns, stock_pool
 
 
 @asynccontextmanager
@@ -56,6 +58,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"鼓掌财经客户端启动失败: {e}")
 
+    # 启动新闻 Ingest 服务（DB写入 + WebSocket 广播）
+    try:
+        news_ingest_service._gz = guzhang_client
+        news_ingest_service._broadcast = news_api_module.manager.broadcast
+        await news_ingest_service.start()
+        logger.info("新闻 Ingest 服务已启动")
+    except Exception as e:
+        logger.warning(f"新闻 Ingest 服务启动失败: {e}")
+
     logger.info("AI Stock 系统启动完成!")
     logger.info(f"API文档地址: http://localhost:8000/docs")
 
@@ -66,6 +77,11 @@ async def lifespan(app: FastAPI):
     await close_postgres()
     await close_mongodb()
     await close_redis()
+    try:
+        await news_ingest_service.stop()
+        logger.info("新闻 Ingest 服务已关闭")
+    except Exception as e:
+        logger.warning(f"新闻 Ingest 服务关闭异常: {e}")
     try:
         await guzhang_client.stop()
         logger.info("鼓掌财经客户端已关闭")
@@ -113,6 +129,11 @@ app.include_router(llm.router, prefix="/api")
 app.include_router(feishu.router, prefix="/api")
 app.include_router(datasource.router, prefix="/api")
 app.include_router(company.router, prefix="/api")
+app.include_router(monitor.router, prefix="/api")
+app.include_router(moneyflow.router, prefix="/api")
+app.include_router(lhb.router, prefix="/api")
+app.include_router(patterns.router, prefix="/api")
+app.include_router(stock_pool.router, prefix="/api")
 
 
 @app.get("/")

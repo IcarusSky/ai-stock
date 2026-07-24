@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Card, Table, Tag, Button, Space, Typography, Modal, Form, Input, Select, message, Tabs, List, Badge } from 'antd'
-import { ThunderboltOutlined, BuildOutlined, PlusOutlined, ExperimentOutlined } from '@ant-design/icons'
+import { Card, Table, Tag, Button, Space, Typography, Modal, Form, Input, Select, message, Tabs, List, Badge, Descriptions } from 'antd'
+import { ThunderboltOutlined, BuildOutlined, PlusOutlined, ExperimentOutlined, CheckOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { strategyApi } from '../services/api'
 
@@ -21,6 +21,11 @@ export default function Strategy() {
   const [marketEnv, setMarketEnv] = useState<any>(null)
   const [createModalVisible, setCreateModalVisible] = useState(false)
   const [llmModalVisible, setLlmModalVisible] = useState(false)
+  const [editModalVisible, setEditModalVisible] = useState(false)
+  const [detailModalVisible, setDetailModalVisible] = useState(false)
+  const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null)
+  const [selectedStrategy, setSelectedStrategy] = useState<Strategy | null>(null)
+  const [editForm] = Form.useForm()
   const [createForm] = Form.useForm()
   const [llmForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -58,7 +63,7 @@ export default function Strategy() {
 
     setLoading(true)
     try {
-      const res = await strategyApi.register({
+      await strategyApi.register({
         name: 'AI生成策略',
         type: 'TREND_FOLLOWING',
         description,
@@ -73,6 +78,44 @@ export default function Strategy() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const applyStrategy = async (strategy: Strategy) => {
+    try {
+      await strategyApi.update(strategy.id, { status: 'ACTIVE' })
+      message.success(`策略「${strategy.name}」已启用`)
+      loadStrategies()
+    } catch (error) {
+      message.error('启用失败')
+    }
+  }
+
+  const handleEditStrategy = async (values: any) => {
+    if (!editingStrategy) return
+    try {
+      await strategyApi.update(editingStrategy.id, values)
+      message.success('策略更新成功')
+      setEditModalVisible(false)
+      loadStrategies()
+    } catch (error) {
+      message.error('更新失败')
+    }
+  }
+
+  const handleDeleteStrategy = (strategy: Strategy) => {
+    Modal.confirm({
+      title: '确认删除策略',
+      content: `确定删除策略「${strategy.name}」吗？`,
+      onOk: async () => {
+        try {
+          await strategyApi.delete(strategy.id)
+          message.success('删除成功')
+          loadStrategies()
+        } catch (error) {
+          message.error('删除失败')
+        }
+      },
+    })
   }
 
   const columns: ColumnsType<Strategy> = [
@@ -111,9 +154,15 @@ export default function Strategy() {
       key: 'action',
       render: (_, record) => (
         <Space>
-          <Button size="small" type="link">查看</Button>
-          <Button size="small" type="link">编辑</Button>
-          <Button size="small" danger type="link">删除</Button>
+          <Button size="small" type="link" onClick={() => { setSelectedStrategy(record); setDetailModalVisible(true); }}>
+            查看
+          </Button>
+          <Button size="small" type="link" onClick={() => { setEditingStrategy(record); editForm.setFieldsValue(record); setEditModalVisible(true); }}>
+            编辑
+          </Button>
+          <Button size="small" danger type="link" onClick={() => handleDeleteStrategy(record)}>
+            删除
+          </Button>
         </Space>
       )
     }
@@ -126,12 +175,6 @@ export default function Strategy() {
     { value: 'SECTOR_ROTATION', label: '板块轮动' },
     { value: 'VALUE_INVESTMENT', label: '价值投资' },
   ]
-
-  const envColors: Record<string, string> = {
-    BULL: 'green',
-    BEAR: 'red',
-    NEUTRAL: 'default'
-  }
 
   return (
     <div>
@@ -207,7 +250,7 @@ export default function Strategy() {
                         title={item.name}
                         description={`权重: ${(item.weight * 100).toFixed(0)}%`}
                       />
-                      <Button size="small">应用此策略</Button>
+                      <Button size="small" type="primary" icon={<CheckOutlined />} onClick={() => applyStrategy(item)}>应用此策略</Button>
                     </List.Item>
                   )}
                 />
@@ -266,6 +309,45 @@ export default function Strategy() {
             生成策略
           </Button>
         </Form>
+      </Modal>
+
+      {/* 编辑策略弹窗 */}
+      <Modal
+        title="编辑策略"
+        open={editModalVisible}
+        onCancel={() => setEditModalVisible(false)}
+        footer={null}
+      >
+        <Form form={editForm} layout="vertical" onFinish={handleEditStrategy}>
+          <Form.Item name="name" label="策略名称" rules={[{ required: true }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item name="type" label="策略类型" rules={[{ required: true }]}>
+            <Select options={strategyTypeOptions} />
+          </Form.Item>
+          <Form.Item name="description" label="策略描述">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+          <Button type="primary" htmlType="submit" loading={loading}>保存</Button>
+        </Form>
+      </Modal>
+
+      {/* 策略详情弹窗 */}
+      <Modal
+        title="策略详情"
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={null}
+      >
+        {selectedStrategy && (
+          <Descriptions column={1} bordered size="small">
+            <Descriptions.Item label="策略名称">{selectedStrategy.name}</Descriptions.Item>
+            <Descriptions.Item label="类型">{selectedStrategy.type}</Descriptions.Item>
+            <Descriptions.Item label="描述">{selectedStrategy.description || '-'}</Descriptions.Item>
+            <Descriptions.Item label="状态">{selectedStrategy.status === 'ACTIVE' ? '启用' : '停用'}</Descriptions.Item>
+            <Descriptions.Item label="参数">{JSON.stringify(selectedStrategy.params) || '-'}</Descriptions.Item>
+          </Descriptions>
+        )}
       </Modal>
     </div>
   )
