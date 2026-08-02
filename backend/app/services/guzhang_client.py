@@ -21,8 +21,20 @@ GUZHANG_WS_URL_TEMPLATE = "wss://swoole2.guzhang.com:443/?token={token}"
 # Token 缓存有效期（秒），避免频繁抓取
 TOKEN_CACHE_TTL: float = 600.0  # 10 分钟
 
-BULLISH_KEYWORDS = {"涨停", "大涨", "利好", "预增", "中标", "获批", "突破", "创新高"}
-BEARISH_KEYWORDS = {"跌停", "大跌", "利空", "预减", "处罚", "违规", "风险", "创新低"}
+BULLISH_KEYWORDS = {"涨停", "大涨", "利好", "预增", "中标", "获批", "突破", "创新高", "增持", "回购"}
+BEARISH_KEYWORDS = {"跌停", "大跌", "利空", "预减", "处罚", "违规", "风险", "创新低", "减持", "退市"}
+
+# 股票代码正则：6位数字，用于从标题/正文中提取
+STOCK_CODE_RE = re.compile(r"\b([0368]\d{5}|9\d{5}|4\d{5})\b")
+
+# 常见板块/概念关键词（用于影响范围判断）
+SECTOR_KEYWORDS = {
+    "半导体", "芯片", "人工智能", "AI", "新能源", "光伏", "锂电池", "储能",
+    "电动车", "汽车", "银行", "证券", "保险", "地产", "医药", "医疗", "白酒",
+    "消费", "食品饮料", "传媒", "游戏", "军工", "钢铁", "煤炭", "有色", "稀土",
+    "化工", "农业", "猪肉", "养鸡", "航运", "港口", "机场", "旅游", "酒店",
+    "机器人", "无人机", "5G", "通信", "计算机", "软件", "互联网", "电商",
+}
 
 # 重连参数
 RECONNECT_BASE_DELAY: float = 5.0   # 初始等待秒数
@@ -241,6 +253,9 @@ class GuzhangClient:
                     pass
 
         sentiment, score = self._tag_sentiment(f"{title} {content}")
+        related_stocks = self._extract_stock_codes(f"{title} {content}")
+        related_sectors = self._extract_sectors(f"{title} {content}")
+        impact_scope = self._infer_impact_scope(title, content, related_stocks, related_sectors)
 
         return NewsItem(
             id=str(aid),
@@ -250,11 +265,52 @@ class GuzhangClient:
             published_at=published_at,
             sentiment=sentiment,
             sentiment_score=score,
+            related_stocks=related_stocks,
+            impact_scope=impact_scope,
             metadata={
                 "category_id": category_id,
                 "category_name": CATEGORY_NAMES.get(category_id, "其他") if isinstance(category_id, int) else "其他",
+                "related_sectors": related_sectors,
             },
         )
+
+    def _extract_stock_codes(self, text: str) -> List[str]:
+        """从文本中提取股票代码（去重）。"""
+        if not text:
+            return []
+        codes = STOCK_CODE_RE.findall(text)
+        seen: Set[str] = set()
+        result: List[str] = []
+        for code in codes:
+            if code not in seen:
+                seen.add(code)
+                result.append(code)
+        return result
+
+    def _extract_sectors(self, text: str) -> List[str]:
+        """从文本中提取板块/概念关键词。"""
+        if not text:
+            return []
+        text = text.replace("AI", "人工智能")
+        return [kw for kw in SECTOR_KEYWORDS if kw in text]
+
+    def _infer_impact_scope(
+        self,
+        title: str,
+        content: str,
+        related_stocks: List[str],
+        related_sectors: List[str],
+    ) -> str:
+        """推断新闻影响范围：MARKET / SECTOR / STOCK。"""
+        full_text = f"{title} {content}"
+        market_keywords = {"大盘", "沪指", "深成指", "创业板", "A股", "股市", "市场", "指数"}
+        if any(kw in full_text for kw in market_keywords):
+            return "MARKET"
+        if related_stocks:
+            return "STOCK"
+        if related_sectors:
+            return "SECTOR"
+        return "MARKET"
 
     def _tag_sentiment(self, text: str) -> tuple:
         """基于关键词规则进行情绪打标。"""

@@ -19,6 +19,7 @@ class NewsItem(BaseModel):
     is_buy_signal: bool = Field(False, description="是否构成买点")
     confidence: float = Field(0.0, ge=0.0, le=1.0, description="判断置信度")
     related_stocks: List[str] = Field(default_factory=list, description="相关股票代码")
+    related_sectors: List[str] = Field(default_factory=list, description="相关板块/概念")
     impact_scope: Literal["MARKET", "SECTOR", "STOCK"] = "MARKET"
     impact_duration: Literal["SHORT", "MEDIUM", "LONG"] = "SHORT"
     summary: Optional[str] = None

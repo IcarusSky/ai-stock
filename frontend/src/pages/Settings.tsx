@@ -33,6 +33,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
   const [testingFeishu, setTestingFeishu] = useState(false)
   const [dsStatus, setDsStatus] = useState<DataSourceStatus | null>(null)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+
+  // settingsLoaded 用于标记配置是否已加载完成，后续可据此控制骨架屏等
 
   const loadDsStatus = () => {
     dataSourceApi
@@ -41,17 +44,47 @@ export default function Settings() {
       .catch(() => setDsStatus(null))
   }
 
+  const loadSettings = () => {
+    settingsApi.get()
+      .then((res) => {
+        const data = res.data
+        if (data.feishu) {
+          feishuForm.setFieldsValue(data.feishu)
+        }
+        if (data.broker) {
+          brokerForm.setFieldsValue({
+            broker_type: data.broker.broker_type || 'pingan',
+            app_id: data.broker.app_id || '',
+            app_secret: data.broker.app_secret?.includes('*') ? '' : (data.broker.app_secret || ''),
+          })
+        }
+        if (data.risk) {
+          riskForm.setFieldsValue({
+            max_position_ratio: (data.risk.max_position_ratio ?? 0.2) * 100,
+            max_total_positions: data.risk.max_total_positions ?? 5,
+            stop_loss_ratio: (data.risk.stop_loss_ratio ?? 0.05) * 100,
+            daily_loss_limit: (data.risk.daily_loss_limit ?? 0.015) * 100,
+            min_trade_amount: data.risk.min_trade_amount ?? 2000,
+          })
+        }
+        setSettingsLoaded(true)
+      })
+      .catch(() => {
+        message.warning('加载系统配置失败')
+        setSettingsLoaded(true)
+      })
+  }
+
   useEffect(() => {
     loadDsStatus()
+    loadSettings()
   }, [])
 
   const saveFeishu = async () => {
     setSaving(true)
     try {
       const values = feishuForm.getFieldsValue()
-      if (values.webhook_url) {
-        await feishuApi.setWebhook(values.webhook_url)
-      }
+      await settingsApi.saveFeishu(values)
       message.success('飞书设置已保存')
     } catch (error) {
       message.error('保存失败')
@@ -89,7 +122,13 @@ export default function Settings() {
   const saveRisk = async () => {
     const values = riskForm.getFieldsValue()
     try {
-      await settingsApi.saveRisk(values)
+      await settingsApi.saveRisk({
+        max_position_ratio: values.max_position_ratio / 100,
+        max_total_positions: values.max_total_positions,
+        stop_loss_ratio: values.stop_loss_ratio / 100,
+        daily_loss_limit: values.daily_loss_limit / 100,
+        min_trade_amount: values.min_trade_amount,
+      })
       message.success('风控设置已保存')
     } catch (error) {
       message.error('保存失败')
@@ -114,6 +153,7 @@ export default function Settings() {
         />
         {dsStatus ? (
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            {settingsLoaded && null}
             <div>
               <Text strong>行情通道：</Text>
               <Tag color={channelColor[dsStatus.market_channel] || 'default'}>

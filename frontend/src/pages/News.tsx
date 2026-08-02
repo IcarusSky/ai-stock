@@ -68,7 +68,8 @@ export default function News() {
   }, [])
 
   useEffect(() => {
-    const wsUrl = 'ws://localhost:8000/api/news/ws'
+    const wsBaseUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
+    const wsUrl = `${wsBaseUrl}/api/news/ws/realtime`
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -82,12 +83,16 @@ export default function News() {
 
       ws.onmessage = (event) => {
         try {
-          const item: NewsItem = JSON.parse(event.data)
-          setNews((prev) => {
-            const filtered = prev.filter((n) => n.id !== item.id)
-            const next = [item, ...filtered]
-            return next.slice(0, 200)
-          })
+          const msg = JSON.parse(event.data)
+          if (msg.type === 'pong') return
+          if (msg.type === 'news') {
+            const item: NewsItem = msg.data
+            setNews((prev) => {
+              const filtered = prev.filter((n) => n.id !== item.id)
+              const next = [item, ...filtered]
+              return next.slice(0, 200)
+            })
+          }
         } catch (err) {
           console.error('解析 WebSocket 消息失败:', err)
         }

@@ -60,12 +60,15 @@ export const backtestApi = {
     api.post('/backtest/optimize', { strategy_id: strategyId, param_name: paramName }, { timeout: LLM_TIMEOUT }),
 }
 
-// Settings API（后端待实现）
+// Settings API
 export const settingsApi = {
+  get: () => api.get('/settings'),
   saveBroker: (config: Record<string, unknown>) =>
     api.post('/settings/broker', config),
   saveRisk: (config: Record<string, unknown>) =>
     api.post('/settings/risk', config),
+  saveFeishu: (config: Record<string, unknown>) =>
+    api.post('/settings/feishu', config),
 }
 
 // 新闻API
@@ -109,6 +112,57 @@ export const companyApi = {
   profile: (keyword: string) => api.get(`/company/${encodeURIComponent(keyword)}/profile`),
   risk: (keyword: string) => api.get(`/company/${encodeURIComponent(keyword)}/risk`),
   news: (keyword: string) => api.get(`/company/${encodeURIComponent(keyword)}/news`),
+}
+
+// 股票池 API
+export const stockPoolApi = {
+  pools: () => api.get('/stock-pool'),
+  pool: (id: number) => api.get(`/stock-pool/${id}`),
+  createPool: (data: any) => api.post('/stock-pool/create', data),
+  updatePool: (id: number, data: any) => api.patch(`/stock-pool/${id}`, data),
+  deletePool: (id: number) => api.delete(`/stock-pool/${id}`),
+  list: (params?: any) => api.get('/stock-pool/list', { params }),
+  poolStocks: (id: number, params?: any) => api.get(`/stock-pool/${id}/items`, { params }),
+  addToPool: (id: number, data: { codes: string[] }) => api.post(`/stock-pool/${id}/add`, { stock_code: data.codes[0] }),
+  removeFromPool: (id: number, code: string) => api.post(`/stock-pool/${id}/remove`, { codes: [code] }),
+  importSector: (id: number, sectorCode: string) => api.post(`/stock-pool/${id}/import-sector?sector_code=${sectorCode}`),
+  sectors: (params?: any) => api.get('/stock-pool/list', { params }),  // 兼容：后端暂无单独分类接口，先用 list 兜底
+  search: (keyword: string) => api.get('/stock-pool/list', { params: { keyword, page_size: 200 } }),
+  sync: (params?: any) => api.post('/stock-pool/sync', params),
+  syncStatus: () => api.get('/stock-pool/sync/status'),
+}
+
+// 监控台 API
+export const monitorApi = {
+  getSignals: (params?: any) => api.get('/monitor/signals', { params }),
+  createSignal: (data: any) => api.post('/monitor/signals', data),
+  markRead: (id: string) => api.post('/monitor/signals/mark-read', { signal_id: id }),
+  markAllRead: () => api.post('/monitor/signals/mark-all-read'),
+  unreadCount: () => api.get('/monitor/signals/unread-count'),
+}
+
+// 资金流 API
+export const moneyflowApi = {
+  rank: (params?: any) => api.get('/moneyflow/rank', { params }),
+  stock: (code: string) => api.get(`/moneyflow/stock/${code}`),
+  sector: (params?: any) => api.get('/moneyflow/sector', { params }),
+  overview: () => api.get('/moneyflow/overview'),
+}
+
+// 龙虎榜 API
+export const lhbApi = {
+  today: (params?: any) => api.get('/lhb/today', { params }),
+  history: (params?: any) => api.get('/lhb/history', { params }),
+  stock: (code: string, params?: any) => api.get(`/lhb/stock/${code}`, { params }),
+  dailyStats: (params?: any) => api.get('/lhb/stats/daily', { params }),
+}
+
+// 形态扫描 API
+export const patternsApi = {
+  scan: (data: any, params?: any) => api.post('/patterns/scan', data, { params }),
+  stats: (params?: any) => api.get('/patterns/stats', { params }),
+  defs: () => api.get('/patterns/defs'),
+  stock: (code: string, params?: any) => api.get(`/patterns/stock/${code}`, { params }),
 }
 
 export default api

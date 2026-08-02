@@ -6,6 +6,8 @@ import {
   ExperimentOutlined,
   ReadOutlined,
   SettingOutlined,
+  LineChartOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 
@@ -14,11 +16,15 @@ import Strategy from './pages/Strategy'
 import Backtest from './pages/Backtest'
 import News from './pages/News'
 import Settings from './pages/Settings'
+import MarketMonitor from './pages/MarketMonitor'
+import StockPool from './pages/StockPool'
 
 const { Header, Sider, Content } = Layout
 
 const menuItems = [
   { key: '/', icon: <DashboardOutlined />, label: '实时行情' },
+  { key: '/monitor', icon: <LineChartOutlined />, label: '市场监控' },
+  { key: '/pool', icon: <DatabaseOutlined />, label: '股票池' },
   { key: '/strategy', icon: <BuildOutlined />, label: '策略管理' },
   { key: '/backtest', icon: <ExperimentOutlined />, label: '回测分析' },
   { key: '/news', icon: <ReadOutlined />, label: '新闻分析' },
@@ -61,6 +67,8 @@ function App() {
           >
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/monitor" element={<MarketMonitor />} />
+              <Route path="/pool" element={<StockPool />} />
               <Route path="/strategy" element={<Strategy />} />
               <Route path="/backtest" element={<Backtest />} />
               <Route path="/news" element={<News />} />

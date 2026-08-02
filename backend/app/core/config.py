@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     FEISHU_WEBHOOK_URL: str = ""
     FEISHU_APP_ID: str = ""
     FEISHU_APP_SECRET: str = ""
+    FEISHU_ENABLE_TRADE_SIGNAL: bool = True
+    FEISHU_ENABLE_POSITION_CHANGE: bool = True
+    FEISHU_ENABLE_RISK_ALERT: bool = True
+    FEISHU_ENABLE_DAILY_REPORT: bool = True
+
+    # 券商配置
+    BROKER_APP_ID: str = ""
+    BROKER_APP_SECRET: str = ""
 
     # 行情数据源
     MARKET_DATA_SOURCE: str = "tdx"  # tdx | eastmoney | tushare（保留字段，实际走 datasource 适配层）

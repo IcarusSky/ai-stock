@@ -1,206 +1,218 @@
-# AI量化交易系统
+# AI 量化交易系统 - 当前设计与未来计划
 
-基于AI的实时量化交易系统，支持多种策略、市场分析、回测和实盘对接。
+> 版本：V3
+> 最后更新：2026-07-26
+> 说明：本文档整合了原 TODO.md / SPEC.md / PLAN_V2.md / DESIGN.md 的核心内容，只保留当前有效设计和未来计划。
 
-## 功能特性
+---
 
-1. **实时行情面板** - 展示持仓、自选股、资金曲线
-2. **多策略支持** - 趋势跟踪、均值回归、突破策略等
-3. **每日策略选择** - 根据市场环境自动推荐策略
-4. **回测分析** - 策略回测、指标分析、参数优化
-5. **券商对接** - 平安证券对接（支持模拟/实盘）
-6. **LLM策略生成** - 自然语言描述生成交易策略
-7. **新闻分析** - 实时新闻、小作文分析、买点判断
-8. **飞书推送** - 交易信号、风险预警、每日报告
+## 一、项目定位
 
-## 技术栈
+基于 AI 的实时量化交易系统，面向 10 万资金规模的个人投资者，支持实时行情、策略管理、回测分析、新闻舆情、股票池维护、信号监控和飞书推送。
 
-- **前端**: React + TypeScript + Ant Design + ECharts
-- **后端**: Python FastAPI + SQLAlchemy
-- **数据库**: PostgreSQL + Redis + MongoDB
-- **实时通信**: WebSocket
-- **LLM**: Claude API / OpenAI API
+---
 
-## 快速启动
+## 二、技术栈
 
-### 1. 环境要求
+- **前端**：React + TypeScript + Vite + Ant Design + ECharts
+- **后端**：Python 3.13 + FastAPI + SQLAlchemy 2.x + Pydantic 2.x
+- **数据库**：PostgreSQL + Redis + MongoDB
+- **实时通信**：WebSocket
+- **数据源**：同花顺 iFinD / akshare（东财）/ 腾讯财经 WS / 天眼查 / 鼓掌财经
+- **LLM**：Kimi / OpenAI / Anthropic（OpenAI 兼容协议）
+- **消息推送**：飞书 Webhook
 
-- Docker & Docker Compose
-- Node.js 18+ (前端开发)
-- Python 3.11+ (后端开发)
+---
 
-### 2. Docker 部署
+## 三、当前已实现功能
 
-```bash
-# 启动所有服务
-docker-compose up -d
+### 3.1 行情与交易
+- 实时行情查询（单股/批量）
+- 腾讯财经 WebSocket 实时行情订阅
+- 模拟交易账户（买入/卖出/撤单）
+- 持仓、资金曲线、成交记录
 
-# 查看日志
-docker-compose logs -f
+### 3.2 策略
+- 策略 CRUD（趋势跟踪/均值回归/突破/板块轮动/价值投资）
+- 市场环境评估
+- 每日策略推荐
 
-# 停止服务
-docker-compose down
-```
+### 3.3 回测
+- 发起回测任务
+- 查询回测结果/状态
+- 策略对比、参数优化（接口已存在）
 
-### 3. 本地开发
+### 3.4 新闻
+- 鼓掌财经实时快讯 WebSocket 接入
+- 新闻列表、AI 分析、市场情绪报告
+- WebSocket 实时推送（待修复广播链路）
 
-**后端：**
-```bash
-cd backend
+### 3.5 数据服务
+- 数据源状态查看
+- 问财选股
+- 天眼查企业数据
 
-# 创建虚拟环境
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# 或 venv\Scripts\activate  # Windows
+### 3.6 股票池（后端已就绪，前端待补齐）
+- 全市场 A 股基础信息同步
+- 行业/概念/地域板块同步
+- 板块成分股同步
+- 自定义股票池 CRUD
 
-# 安装依赖
-pip install -r requirements.txt
+### 3.7 监控与特色数据（后端已就绪，前端待补齐）
+- 信号监控台
+- 主力资金流排名
+- 龙虎榜
+- 技术形态扫描
 
-# 复制环境配置
-cp .env.example .env
-# 编辑 .env 填入API密钥
+---
 
-# 启动服务
-uvicorn app.main:app --reload --port 8000
-```
+## 四、第一阶段计划（当前执行中）
 
-**前端：**
-```bash
-cd frontend
+### 4.1 文档整合
+- 合并原 TODO.md / SPEC.md / PLAN_V2.md / DESIGN.md 到本文档
+- 删除旧的重复/过期文档
 
-# 安装依赖
-npm install
+### 4.2 环境修复
+- 修复 Python 3.13 下 `pip install -r requirements.txt` 失败问题
+- 替换不兼容的 `empyrical==0.5.5` 为 `empyrical-reloaded`
+- 更新其他依赖到兼容 Python 3.13 的版本
 
-# 启动开发服务器
-npm run dev
-```
+### 4.3 Settings 配置接口
+- 新建 `backend/app/api/settings.py`
+- 实现：
+  - `GET /api/settings`
+  - `POST /api/settings/broker`
+  - `POST /api/settings/risk`
+  - `POST /api/settings/feishu`
+- 在 `main.py` 注册路由
+- 前端 Settings 页面加载时回填，保存时发送完整字段
 
-### 4. 访问地址
+### 4.4 新闻系统修复
+- 新增 `NewsRecord` ORM 模型
+- 修复 `news_ingest_service` 广播类型不匹配
+- 改为事件订阅驱动，避免重复广播
+- 实现真实 DB 写入
+- 前端接入 `/api/news/ws/realtime` 广播端点
+- 从标题/内容提取关联股票代码和板块
 
-- 前端页面: http://localhost:3000
-- API文档: http://localhost:8000/docs
+### 4.5 新增前端页面
+- **市场监控**（MarketMonitor）：集成信号、资金流、龙虎榜、形态扫描
+- **股票池**（StockPool）：行业/概念树、全市场股票列表、自定义池管理
 
-## 配置说明
+### 4.6 验证与通知
+- 启动后端/前端，验证第一阶段功能
+- 发送飞书通知到用户配置的 Webhook
 
-### 环境变量 (.env)
+---
+
+## 五、第二阶段计划
+
+1. **股票池定时同步**
+   - APScheduler 每日 08:30 / 15:30 自动同步
+   - 新增 `sync_job_log` 表持久化同步状态
+   - 同步进度 WebSocket 推送
+
+2. **回测真实化**
+   - 前端轮询 `/backtest/{task_id}/status` 和 `/backtest/{task_id}/result`
+   - 策略对比调用 `/backtest/compare`
+   - 参数优化传入正确 `strategy_id`
+
+3. **AI 策略生成修复**
+   - Strategy 页 AI 生成按钮先调 LLM，再注册策略
+
+4. **自选股持久化**
+   - 将 `POST /market/watchlist` 接入真实数据库
+
+---
+
+## 六、第三阶段计划（超越对标：小宇量化）
+
+对标产品核心优势：多市场 K 线、专业画线工具、策略市场、雷达扫描、每日必看。
+
+我方超越方向：
+
+1. **实时快讯与舆情**：鼓掌财经秒级快讯 + AI 买点分析
+2. **智能盯盘/预警**：价格、涨跌幅、成交量、技术指标、新闻情绪多维度预警
+3. **AI Agent 策略闭环**：自然语言 → 代码 → 回测 → 报告
+4. **可视化策略编辑器**：低代码/拖拽构建经典策略
+5. **回测评估深度化**：夏普、最大回撤、年化、胜率、Calmar、Sortino、参数敏感性热力图
+6. **多因子选股雷达**：财务、技术、资金、新闻情绪、机构持仓
+7. **组合与仓位管理**：组合回测、仓位再平衡
+8. **多屏对比与关联分析**：多股同屏、板块联动、相关性矩阵
+9. **指标与画图模板市场**
+10. **模拟/实盘交易接入**
+11. **AI 可解释性**
+12. **社区与策略众测**
+13. **移动端同步**
+
+---
+
+## 七、配置清单
+
+核心配置在 `backend/.env`：
 
 ```env
 # 数据库
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/aistock
+DATABASE_URL=postgresql+asyncpg://aistock:aistock123@localhost:5432/aistock
 REDIS_URL=redis://localhost:6379
 MONGODB_URL=mongodb://localhost:27017/aistock
 
-# LLM配置
-LLM_PROVIDER=anthropic
-ANTHROPIC_API_KEY=sk-ant-xxxxx
+# LLM
+LLM_BASE_URL=https://api.moonshot.cn/v1
+LLM_API_KEY=
+LLM_MODEL=kimi-k2.6
 
-# 飞书配置
-FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/xxxxx
+# 飞书
+FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/e6b9ad79-b308-4ecb-82f2-97643b82aaa9
 
-# 风控配置（10万资金）
+# 同花顺 iFinD
+IFIND_REFRESH_TOKEN=
+MARKET_DATA_PRIORITY=auto
+
+# 问财
+PYWENCAI_COOKIE=
+
+# 天眼查
+TIANYANCHA_TOKEN=
+TIANYANCHA_DAILY_LIMIT=100
+
+# 风控（10 万资金默认）
 MAX_POSITION_RATIO=0.2
 MAX_TOTAL_POSITIONS=5
 STOP_LOSS_RATIO=0.05
 DAILY_LOSS_LIMIT=0.015
+WEEKLY_LOSS_LIMIT=0.05
 MIN_TRADE_AMOUNT=2000
+
+# 回测
+BACKTEST_COMMISSION=0.00025
+BACKTEST_STAMP_TAX=0.001
+BACKTEST_SLIPPAGE=0.001
 ```
 
-### 数据源配置（同花顺 iFinD / 天眼查）
+---
 
-行情数据支持双通道自动降级，企业数据接入天眼查开放平台，均在 `backend/.env` 配置：
+## 八、快速启动
 
-```env
-# 同花顺 iFinD 官方 HTTP API（https://quantapi.51ifind.com 注册即有免费额度）
-IFIND_REFRESH_TOKEN=
-# auto=有 token 走 iFinD、否则走 akshare 免费通道；也可强制 ifind/free/mock
-MARKET_DATA_PRIORITY=auto
-# 天眼查开放平台（https://www.tianyancha.com/data 申请，按次计费）
-TIANYANCHA_TOKEN=
-TIANYANCHA_DAILY_LIMIT=100
+```bash
+# 后端
+cd backend
+py -3.13 -m uvicorn app.main:app --port 8000
+
+# 前端
+cd frontend
+npm run dev
 ```
 
-- **同花顺 iFinD**：官方接口（含免费额度），refresh_token 从 iFinD SDK 包「超级命令 → 工具 → refresh_token 查询」获取；未配置时行情自动走 akshare 免费通道（网页抓取，无 SLA，仅限个人研究），再失败回退内置模拟数据，接口不会 500。
-- **天眼查**：企业工商/股东/经营异常/行政处罚/诉讼/舆情接口，未配置 token 时企业数据接口返回 503 及配置指引；`TIANYANCHA_DAILY_LIMIT` 控制每日调用上限，防止超额计费。
-- **问财选股**：`POST /api/datasource/wencai`，自然语言选股；有 iFinD token 走官方智能选股，或配置 `PYWENCAI_COOKIE` 走 pywencai 免费通道。
-- **数据源状态**：`GET /api/datasource/status` 查看当前行情通道与各 token 配置状态，前端「设置」页也有展示。
+访问：
+- 前端：http://localhost:3000
+- API 文档：http://localhost:8000/docs
 
-> Kimi CLI 用户提示：同花顺另有官方 iFinD MCP Server（https://mcp.51ifind.com ，个人版 ¥40/月，注册有免费试用），可在 Kimi CLI 的 MCP 配置中加入（`{"mcpServers": {...,"url": "...", "headers": {"Authorization": "<密钥>"}}}`，官网可一键生成），让 AI 助手直接查行情选股；项目后端运行时使用上面的 HTTP API 接入，两者互不影响。
+---
 
-## 风险提示
+## 九、风险提示
 
-⚠️ **重要声明**
-
-1. 本系统仅供辅助参考，不构成投资建议
-2. 炒股有风险，入市需谨慎
-3. 实盘交易前请充分测试和评估风险
-4. 初始资金建议从小资金开始，逐步增加
-
-### 建议风控参数（10万资金）
-
-| 参数 | 建议值 | 说明 |
-|------|--------|------|
-| 单只仓位上限 | 20% | 不超过2万元 |
-| 最大持仓数 | 5只 | 分散风险 |
-| 止损线 | 5% | 亏损达5%必须止损 |
-| 日亏损上限 | 1.5% | 日亏1500元停止 |
-| 单次最小交易 | 2000元 | 避免佣金占比过高 |
-
-## 项目结构
-
-```
-ai-stock/
-├── backend/
-│   ├── app/
-│   │   ├── api/          # API路由
-│   │   ├── core/         # 核心模块
-│   │   ├── services/     # 业务服务
-│   │   ├── models/       # 数据模型
-│   │   └── schemas/      # Pydantic模型
-│   ├── brokers/          # 券商适配器
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── pages/        # 页面组件
-│   │   ├── services/     # API服务
-│   │   └── App.tsx
-│   └── package.json
-├── data/                 # 数据存储
-├── docker-compose.yml
-└── README.md
-```
-
-## 核心API
-
-### 行情服务
-- `GET /api/market/quote/{code}` - 获取股票行情
-- `GET /api/market/quotes` - 批量获取行情
-- `GET /api/market/kline/{code}` - 获取K线数据
-- `GET /api/market/sentiment` - 市场情绪
-
-### 策略服务
-- `GET /api/strategy/list` - 策略列表
-- `POST /api/strategy/register` - 注册策略
-- `POST /api/strategy/evaluate` - 评估市场环境
-- `GET /api/strategy/daily/recommend` - 每日推荐
-
-### 订单服务
-- `POST /api/order/buy` - 买入下单
-- `POST /api/order/sell` - 卖出下单
-- `POST /api/order/cancel` - 撤单
-
-### 回测服务
-- `POST /api/backtest/run` - 发起回测
-- `GET /api/backtest/{task_id}/result` - 获取结果
-- `POST /api/backtest/optimize` - 参数优化
-
-### 新闻服务
-- `GET /api/news/realtime` - 实时新闻
-- `GET /api/news/analyze/{id}` - 分析新闻
-- `GET /api/news/market_sentiment` - 市场情绪报告
-
-### LLM服务
-- `POST /api/llm/strategy/generate` - 生成策略
-
-## 许可证
-
-MIT License
+- 本系统仅供辅助参考，不构成投资建议
+- 实盘交易前请充分回测和评估风险
+- 初始资金建议从小资金开始，逐步增加
+- 数据来源包含第三方公开接口，存在可用性和准确性风险

@@ -21,6 +21,34 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.database import Base
 
 
+class NewsRecord(Base):
+    """新闻记录（持久化）"""
+
+    __tablename__ = "news_record"
+    __table_args__ = (
+        Index("ix_news_record_published_at", "published_at"),
+        Index("ix_news_record_source", "source"),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(512), nullable=False)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    published_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    sentiment: Mapped[str] = mapped_column(String(16), default="NEUTRAL")
+    sentiment_score: Mapped[float] = mapped_column(Numeric(4, 3), default=0.0)
+    is_buy_signal: Mapped[bool] = mapped_column(Boolean, default=False)
+    confidence: Mapped[float] = mapped_column(Numeric(4, 3), default=0.0)
+    related_stocks: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    related_sectors: Mapped[list[str] | None] = mapped_column(JSONB, nullable=True)
+    impact_scope: Mapped[str] = mapped_column(String(16), default="MARKET")
+    impact_duration: Mapped[str] = mapped_column(String(16), default="SHORT")
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    extra_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class StockBasic(Base):
     """A 股基础信息"""
 
@@ -117,9 +145,8 @@ class StockPoolItem(Base):
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 关联到 StockBasic（用于 selectinload 预加载）
-    stock: Mapped[Optional["StockBasic"]] = relationship(
+    stock: Mapped["StockBasic | None"] = relationship(
         "StockBasic",
         primaryjoin="StockPoolItem.stock_code==foreign(StockBasic.code)",
         lazy="selectin",
-        default=None,
     )

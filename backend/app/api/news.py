@@ -39,12 +39,13 @@ class ConnectionManager:
         except Exception:
             self.disconnect(websocket)
 
-    async def broadcast(self, message: str) -> None:
+    async def broadcast(self, message: NewsItem) -> None:
         """向所有已连接的前端广播消息。"""
         disconnected = []
+        payload = json.dumps({"type": "news", "data": message.model_dump(mode="json")})
         for connection in self.active_connections:
             try:
-                await connection.send_text(message)
+                await connection.send_text(payload)
             except Exception:
                 disconnected.append(connection)
         for conn in disconnected:
