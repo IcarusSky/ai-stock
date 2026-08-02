@@ -111,7 +111,10 @@ class NewsIngestService:
                 from app.models.stock import NewsRecord
                 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-                stmt = pg_insert(NewsRecord).values(
+                # 用 __table__（Core Table）而不是 ORM 类：ORM 类上 metadata 是
+                # Declarative 保留属性，values(metadata=...) 会冲突。
+                news_table = NewsRecord.__table__
+                stmt = pg_insert(news_table).values(
                     id=item.id,
                     title=item.title,
                     content=item.content,
@@ -127,7 +130,7 @@ class NewsIngestService:
                     impact_scope=item.impact_scope,
                     impact_duration=item.impact_duration,
                     summary=item.summary,
-                    extra_metadata=item.metadata,
+                    metadata=item.metadata,
                 )
                 stmt = stmt.on_conflict_do_update(
                     index_elements=["id"],
@@ -139,7 +142,7 @@ class NewsIngestService:
                         "sentiment_score": stmt.excluded.sentiment_score,
                         "related_stocks": stmt.excluded.related_stocks,
                         "related_sectors": stmt.excluded.related_sectors,
-                        "extra_metadata": stmt.excluded.extra_metadata,
+                        "metadata": stmt.excluded.metadata,
                     },
                 )
                 await session.execute(stmt)

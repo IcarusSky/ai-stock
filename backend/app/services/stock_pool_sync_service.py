@@ -2,14 +2,15 @@
 AI Stock - 股票池同步服务
 
 数据源：
-- 行业板块：akshare stock_board_industry_name_ths（同花顺，90 个）
+- 行业板块：akshare stock_board_industry_name_ths（同花顺，90 个）+ stock_sector_spot（新浪，49 个，含成分股）
 - 概念板块：akshare stock_board_concept_name_ths（同花顺，375 个）
 - 全市场股票：akshare stock_zh_a_spot（新浪，5500+ 只）
-- 板块成分股：暂不同步（同花顺/新浪公开接口均未提供成分股列表；东财 push2 在当前网络下 TLS 断连不可用）
+- 板块成分股：akshare stock_sector_detail（新浪，49 个行业）
 
-同步策略：
-- 全量同步：板块列表 + 全市场股票
-- 板块成分后续通过其它渠道补齐
+说明：
+- 同花顺行业列表无成分股公开接口，因此额外引入新浪 49 个行业作为可筛选的行业维度
+- 同花顺概念板块同样没有公开成分接口，本次同步仅保留列表
+- 东财 push2 在当前网络下 TLS 断连不可用
 """
 import asyncio
 from datetime import datetime
@@ -92,14 +93,15 @@ class StockPoolSyncService:
         return self._progress
 
     async def _sync_sectors(self):
-        """同步同花顺行业/概念板块列表"""
-        logger.info("开始同步板块列表（同花顺）...")
+        """同步板块列表：同花顺行业 + 概念 + 新浪行业（用于成分股关联）"""
+        logger.info("开始同步板块列表（同花顺 + 新浪）...")
         step = {"step": "sectors", "count": 0, "message": ""}
 
         try:
             # 串行调用，避免 thread pool 并发初始化 V8 崩溃（见 _run_ak_sync docstring）
             industries = await _run_ak_sync(ak.stock_board_industry_name_ths)
             concepts = await _run_ak_sync(ak.stock_board_concept_name_ths)
+            sina_industries = await _run_ak_sync(ak.stock_sector_spot, indicator="新浪行业")
 
             sectors = []
             now = datetime.utcnow()
@@ -129,6 +131,20 @@ class StockPoolSyncService:
                         "name": name,
                         "type": "concept",
                         "source": "tonghuashun",
+                        "updated_at": now,
+                    })
+
+            if sina_industries is not None and not sina_industries.empty:
+                for _, row in sina_industries.iterrows():
+                    name = str(row.get("板块", "")).strip()
+                    label = str(row.get("label", "")).strip()
+                    if not name or not label:
+                        continue
+                    sectors.append({
+                        "code": f"sina-{label}",
+                        "name": name,
+                        "type": "industry",
+                        "source": "sina",
                         "updated_at": now,
                     })
 
@@ -231,17 +247,90 @@ class StockPoolSyncService:
         await session.commit()
 
     async def _sync_sector_members_placeholder(self):
-        """板块成分股：当前免费数据源（同花顺/新浪）未提供成分列表，
-        东财 push2 在当前网络下 TLS 断连不可用。
-        保留占位，待有可用数据源后补齐。
+        """同步板块成分股：仅同步新浪行业（49 个，ak.stock_sector_detail 可获取成分）。
+
+        同花顺行业/概念板块暂无公开成分接口，跳过。
         """
-        step = {
-            "step": "members",
-            "count": 0,
-            "message": "板块成分股同步已跳过：当前数据源不提供成分列表（东财 push2 不可用）",
-        }
-        logger.warning(step["message"])
+        step = {"step": "members", "count": 0, "message": ""}
+        logger.info("开始同步板块成分股（新浪行业）...")
+
+        try:
+            sina_industries = await _run_ak_sync(ak.stock_sector_spot, indicator="新浪行业")
+            if sina_industries is None or sina_industries.empty:
+                raise ValueError("ak.stock_sector_spot 返回空数据")
+
+            total_members = 0
+            async with async_session_maker() as session:
+                # 预先拉取 stock_basic 中全部 code，用于过滤掉未入库的成分股
+                result = await session.execute(select(StockBasic.code))
+                valid_codes = {row[0] for row in result.all()}
+                logger.info(f"stock_basic 共 {len(valid_codes)} 条，开始逐板块同步成分")
+
+                for _, row in sina_industries.iterrows():
+                    label = str(row.get("label", "")).strip()
+                    name = str(row.get("板块", "")).strip()
+                    if not label:
+                        continue
+                    sector_code = f"sina-{label}"
+
+                    detail = None
+                    last_err: Exception | None = None
+                    for attempt in range(3):
+                        try:
+                            detail = await _run_ak_sync(ak.stock_sector_detail, sector=label)
+                            last_err = None
+                            break
+                        except Exception as e:
+                            last_err = e
+                            await asyncio.sleep(2 * (attempt + 1))
+                    if last_err is not None:
+                        logger.warning(f"获取板块成分失败 {name}({label}): {last_err}")
+                        continue
+
+                    if detail is None or detail.empty:
+                        continue
+
+                    members = []
+                    now = datetime.utcnow()
+                    for _, drow in detail.iterrows():
+                        code = str(drow.get("code", "")).strip().zfill(6)
+                        if not code or code not in valid_codes:
+                            continue
+                        members.append({
+                            "sector_code": sector_code,
+                            "stock_code": code,
+                            "weight": None,
+                            "updated_at": now,
+                        })
+
+                    if members:
+                        await self._bulk_upsert_sector_members(session, members)
+                        total_members += len(members)
+                        logger.debug(f"板块 {name}({sector_code}) 成分 {len(members)} 条")
+
+            step["count"] = total_members
+            step["message"] = f"板块成分股同步完成，共 {total_members} 条"
+            logger.info(step["message"])
+        except Exception as e:
+            step["message"] = f"板块成分股同步失败: {e}"
+            logger.warning(step["message"])
+            step["count"] = 0
+
         self._progress["steps"].append(step)
+
+    async def _bulk_upsert_sector_members(self, session: AsyncSession, rows: list[dict]):
+        if not rows:
+            return
+        # 先清空该板块的旧成分，再批量插入，避免残留已调出的股票
+        sector_code = rows[0]["sector_code"]
+        await session.execute(
+            text("DELETE FROM sector_member WHERE sector_code = :code"),
+            {"code": sector_code},
+        )
+        stmt = pg_insert(SectorMember).values(rows)
+        stmt = stmt.on_conflict_do_nothing(index_elements=["sector_code", "stock_code"])
+        await session.execute(stmt)
+        await session.commit()
 
     async def sync_stock_concepts(self, stock_code: str) -> list[dict]:
         """查询某只股票的概念板块列表"""

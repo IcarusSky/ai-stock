@@ -194,12 +194,45 @@ BACKTEST_SLIPPAGE=0.001
 
 ## 八、快速启动
 
-```bash
-# 后端
-cd backend
-py -3.13 -m uvicorn app.main:app --port 8000
+> 项目依赖安装在 `backend/venv/` 虚拟环境中，**不要**用系统 Python（`py -3.13` / `python`）启动。
 
-# 前端
+### 首次安装
+
+```powershell
+# 后端依赖（首次或 requirements.txt 变更后）
+cd backend
+py -3.13 -m venv venv
+.\venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# 前端依赖
+cd ..\frontend
+npm install
+```
+
+### 启动后端
+
+任选一种：
+
+```powershell
+# 方式 1：直接用 venv 的 Python（最简单，推荐）
+cd backend
+.\venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# 方式 2：先激活 venv
+cd backend
+.\venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# 方式 3：直接用 venv 的 uvicorn 可执行文件
+cd backend
+.\venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000
+```
+
+加 `--reload` 开启代码热重载。
+
+### 启动前端
+
+```powershell
 cd frontend
 npm run dev
 ```
@@ -207,6 +240,14 @@ npm run dev
 访问：
 - 前端：http://localhost:3000
 - API 文档：http://localhost:8000/docs
+
+### 常见错误
+
+| 报错 | 原因 | 解决 |
+|------|------|------|
+| `No module named uvicorn` | 用了系统 Python（`py -3.13` 或全局 `python`），依赖装在 venv 里 | 改用 `.\venv\Scripts\python.exe -m uvicorn ...` |
+| `Port 8000 already in use` | 上一个 backend 进程没退 | `netstat -ano \| findstr :8000` 找 PID 后 `taskkill /F /PID <pid>` |
+| 前端打开 5173 没响应 | 项目 Vite 配置改成了 3000 | 访问 http://localhost:3000 |
 
 ---
 
