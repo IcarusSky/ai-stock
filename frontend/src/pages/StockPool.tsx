@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Card, Row, Col, Tree, Table, Button, Space, Tabs, Tag, Input, Modal, message,
   Transfer, Spin, Typography, Popconfirm, Form, Select
@@ -40,37 +40,51 @@ export default function StockPool() {
   const [syncing, setSyncing] = useState(false)
 
   const [allStocks, setAllStocks] = useState<PoolItem[]>([])
+  const [allTotal, setAllTotal] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [transferOptions, setTransferOptions] = useState<{ key: string; title: string; description: string }[]>([])
+  const [transferLoading, setTransferLoading] = useState(false)
+
   const [pools, setPools] = useState<{ id: number; name: string; stock_count: number }[]>([])
   const [selectedPool, setSelectedPool] = useState<number>(1)
   const [poolStocks, setPoolStocks] = useState<PoolItem[]>([])
+  const [poolTotal, setPoolTotal] = useState(0)
+  const [poolPage, setPoolPage] = useState(1)
+  const [poolPageSize, setPoolPageSize] = useState(50)
   const [sectors, setSectors] = useState<SectorNode[]>([])
   const [selectedSector, setSelectedSector] = useState<string | null>(null)
 
   const [keyword, setKeyword] = useState('')
-  const [searchResults, setSearchResults] = useState<PoolItem[]>([])
   const [createVisible, setCreateVisible] = useState(false)
   const [newPoolName, setNewPoolName] = useState('')
   const [transferVisible, setTransferVisible] = useState(false)
   const [transferTargetKeys, setTransferTargetKeys] = useState<React.Key[]>([])
   const [form] = Form.useForm()
+  const syncTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [syncStatus, setSyncStatus] = useState<any>(null)
 
-  const loadAllStocks = async () => {
+  const loadAllStocks = async (page = currentPage, size = pageSize) => {
     setLoading(true)
     try {
-      const params: any = { page_size: 1000 }
+      const params: any = { page, page_size: size }
       if (selectedSector) {
         const [, type, code] = selectedSector.split(':')
         if (type === 'industry') params.industry_code = code
         if (type === 'concept') params.concept_code = code
       }
+      if (keyword.trim()) {
+        params.keyword = keyword.trim()
+      }
       const res = await stockPoolApi.list(params)
+      setAllTotal(res.data.total || 0)
       setAllStocks((res.data.items || []).map((s: any) => ({
         id: s.code,
         code: s.code,
         name: s.name,
         market: s.market,
-        industry: s.industry,
-        concept: s.concept,
+        industries: s.industries || [],
+        concepts: s.concepts || [],
         added_at: s.updated_at,
         source: 'db'
       })))
@@ -106,15 +120,18 @@ export default function StockPool() {
     }
   }
 
-  const loadPoolStocks = async () => {
+  const loadPoolStocks = async (page = poolPage, size = poolPageSize) => {
     setLoading(true)
     try {
-      const res = await stockPoolApi.poolStocks(selectedPool, { limit: 1000 })
+      const res = await stockPoolApi.poolStocks(selectedPool, { page, page_size: size })
+      setPoolTotal((res.data || []).length) // 后端池内接口当前返回数组，暂时用长度
       setPoolStocks((res.data || []).map((it: any) => ({
         id: it.stock_code,
         code: it.stock_code,
         name: it.stock?.name || it.stock_code,
         market: it.stock?.market,
+        industries: it.stock?.industries || [],
+        concepts: it.stock?.concepts || [],
         added_at: it.added_at,
         source: 'pool'
       })))
@@ -128,11 +145,11 @@ export default function StockPool() {
   const loadSectors = async () => {
     try {
       const [industryRes, conceptRes] = await Promise.all([
-        stockPoolApi.list({ industry_code: 'all', page_size: 200 }),
-        stockPoolApi.list({ concept_code: 'all', page_size: 200 })
+        stockPoolApi.industries(),
+        stockPoolApi.concepts()
       ])
-      const industries = (industryRes.data.items || []).slice(0, 100).map((s: any) => ({ key: `industry:${s.code || s.name}`, title: s.name, type: 'industry' as const, code: s.code || s.name }))
-      const concepts = (conceptRes.data.items || []).slice(0, 100).map((s: any) => ({ key: `concept:${s.code || s.name}`, title: s.name, type: 'concept' as const, code: s.code || s.name }))
+      const industries = (industryRes.data || []).slice(0, 100).map((s: any) => ({ key: `industry:${s.code || s.name}`, title: s.name, type: 'industry' as const, code: s.code || s.name }))
+      const concepts = (conceptRes.data || []).slice(0, 100).map((s: any) => ({ key: `concept:${s.code || s.name}`, title: s.name, type: 'concept' as const, code: s.code || s.name }))
       setSectors([
         { key: 'market', title: '全市场', type: 'market', code: 'all' },
         { key: 'sector', title: '板块', type: 'sector', children: [] },
@@ -149,34 +166,42 @@ export default function StockPool() {
     try {
       await stockPoolApi.sync({ market: 'all' })
       message.success('股票池同步任务已触发')
-      loadAllStocks()
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current)
+      syncTimerRef.current = setInterval(async () => {
+        try {
+          const res = await stockPoolApi.syncStatus()
+          const data = res.data
+          setSyncStatus(data)
+          if (data.status === 'done' || data.status === 'failed') {
+            if (syncTimerRef.current) clearInterval(syncTimerRef.current)
+            setSyncing(false)
+            loadAllStocks()
+            loadSectors()
+            if (data.status === 'done') {
+              message.success('同步完成')
+            } else {
+              message.error(`同步失败: ${data.error || '未知错误'}`)
+            }
+          }
+        } catch (error) {
+          console.error('查询同步状态失败:', error)
+        }
+      }, 2000)
     } catch (error) {
       message.error('同步失败')
-    } finally {
       setSyncing(false)
     }
   }
 
+  useEffect(() => {
+    return () => {
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current)
+    }
+  }, [])
+
   const handleSearch = async () => {
-    if (!keyword.trim()) {
-      setSearchResults([])
-      return
-    }
-    try {
-      const res = await stockPoolApi.search(keyword)
-      setSearchResults((res.data.items || []).map((s: any) => ({
-        id: s.code,
-        code: s.code,
-        name: s.name,
-        market: s.market,
-        industry: s.industry,
-        concept: s.concept,
-        added_at: s.updated_at,
-        source: 'search'
-      })))
-    } catch (error) {
-      message.error('搜索失败')
-    }
+    setCurrentPage(1)
+    loadAllStocks(1, pageSize)
   }
 
   const addToPool = async (codes: string[]) => {
@@ -213,10 +238,23 @@ export default function StockPool() {
     }
   }
 
-  const openTransfer = () => {
+  const openTransfer = async () => {
     setTransferTargetKeys([])
     form.setFieldsValue({ codes: [] })
     setTransferVisible(true)
+    setTransferLoading(true)
+    try {
+      const res = await stockPoolApi.list({ page_size: 3000 })
+      setTransferOptions((res.data.items || []).map((s: any) => ({
+        key: s.code,
+        title: `${s.name}(${s.code})`,
+        description: `${(s.industries || []).slice(0, 2).join(' ')} ${(s.concepts || []).slice(0, 2).join(' ')}`.trim()
+      })))
+    } catch (error) {
+      message.error('加载可选股票失败')
+    } finally {
+      setTransferLoading(false)
+    }
   }
 
   const handleTransferOk = () => {
@@ -227,34 +265,30 @@ export default function StockPool() {
   useEffect(() => {
     loadPools()
     loadSectors()
-    loadAllStocks()
+    loadAllStocks(1, pageSize)
   }, [])
 
   useEffect(() => {
-    loadPoolStocks()
+    loadPoolStocks(1, poolPageSize)
   }, [selectedPool])
 
   useEffect(() => {
-    loadAllStocks()
+    setCurrentPage(1)
+    loadAllStocks(1, pageSize)
   }, [selectedSector])
 
   const columns: ColumnsType<PoolItem> = [
     { title: '代码', dataIndex: 'code', width: 100 },
     { title: '名称', dataIndex: 'name', width: 120 },
     {
-      title: '板块',
-      dataIndex: 'sector',
-      render: (v) => v ? <Tag>{v}</Tag> : '-'
-    },
-    {
       title: '行业',
-      dataIndex: 'industry',
-      render: (v) => v ? <Tag color="blue">{v}</Tag> : '-'
+      dataIndex: 'industries',
+      render: (v: string[]) => v?.length ? v.slice(0, 3).map((name: string) => <Tag key={name} color="blue">{name}</Tag>) : '-'
     },
     {
       title: '概念',
-      dataIndex: 'concept',
-      render: (v) => v ? <Tag color="green">{v}</Tag> : '-'
+      dataIndex: 'concepts',
+      render: (v: string[]) => v?.length ? v.slice(0, 3).map((name: string) => <Tag key={name} color="green">{name}</Tag>) : '-'
     },
     { title: '市场', dataIndex: 'market', width: 80 },
     { title: '来源', dataIndex: 'source', width: 100 },
@@ -324,6 +358,17 @@ export default function StockPool() {
                 <Select value={selectedPool} onChange={setSelectedPool} style={{ width: 160 }} options={pools.map((p) => ({ label: p.name, value: p.id }))} />
                 <Button icon={<PlusOutlined />} onClick={() => setCreateVisible(true)}>新建池</Button>
                 <Button icon={<SyncOutlined />} loading={syncing} onClick={syncStocks}>同步全市场</Button>
+                {syncStatus?.status === 'running' && syncStatus.steps && syncStatus.steps.length > 0 && (
+                  <span style={{ marginLeft: 12, color: '#1890ff' }}>
+                    同步中: {syncStatus.steps[syncStatus.steps.length - 1].message || syncStatus.status}
+                  </span>
+                )}
+                {syncStatus?.status === 'done' && (
+                  <span style={{ marginLeft: 12, color: '#52c41a' }}>同步完成</span>
+                )}
+                {syncStatus?.status === 'failed' && (
+                  <span style={{ marginLeft: 12, color: '#f5222d' }}>同步失败</span>
+                )}
                 <Button onClick={openTransfer}>批量加入</Button>
               </Space>
             }
@@ -341,27 +386,47 @@ export default function StockPool() {
             }
           >
             <Tabs activeKey={activeTab} onChange={setActiveTab}>
-              <TabPane tab={<span><DatabaseOutlined /> 全市场 ({allStocks.length})</span>} key="all">
+              <TabPane tab={<span><DatabaseOutlined /> 全市场 ({allTotal})</span>} key="all">
                 <Spin spinning={loading}>
                   <Table
                     columns={columns.filter((c) => c.title !== '来源')}
-                    dataSource={keyword ? searchResults : allStocks}
+                    dataSource={allStocks}
                     rowKey="code"
                     size="small"
-                    pagination={{ pageSize: 20 }}
+                    pagination={{
+                      current: currentPage,
+                      pageSize,
+                      total: allTotal,
+                      showSizeChanger: true,
+                      onChange: (page, size) => {
+                        setCurrentPage(page)
+                        if (size) setPageSize(size)
+                        loadAllStocks(page, size || pageSize)
+                      }
+                    }}
                     scroll={{ x: 900 }}
                   />
                 </Spin>
               </TabPane>
 
-              <TabPane tab={<span><FolderOutlined /> {selectedPoolName} ({poolStocks.length})</span>} key="pool">
+              <TabPane tab={<span><FolderOutlined /> {selectedPoolName} ({poolTotal})</span>} key="pool">
                 <Spin spinning={loading}>
                   <Table
                     columns={columns}
                     dataSource={poolStocks}
                     rowKey="code"
                     size="small"
-                    pagination={{ pageSize: 20 }}
+                    pagination={{
+                      current: poolPage,
+                      pageSize: poolPageSize,
+                      total: poolTotal,
+                      showSizeChanger: true,
+                      onChange: (page, size) => {
+                        setPoolPage(page)
+                        if (size) setPoolPageSize(size)
+                        loadPoolStocks(page, size || poolPageSize)
+                      }
+                    }}
                     scroll={{ x: 900 }}
                   />
                 </Spin>
@@ -393,13 +458,14 @@ export default function StockPool() {
         width={700}
       >
         <Transfer
-          dataSource={allStocks.map((s) => ({ key: s.code, title: `${s.name}(${s.code})`, description: `${s.sector || ''} ${s.industry || ''}` }))}
+          dataSource={transferOptions}
           titles={['全市场股票', `加入 ${selectedPoolName}`]}
           targetKeys={transferTargetKeys}
           onChange={(nextKeys) => setTransferTargetKeys(nextKeys)}
           render={(item) => item.title}
           listStyle={{ width: 300, height: 400 }}
           showSearch
+          disabled={transferLoading}
           filterOption={(inputValue, item: any) => item.title?.toLowerCase().includes(inputValue.toLowerCase()) || false}
         />
       </Modal>

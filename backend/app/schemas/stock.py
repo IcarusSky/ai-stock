@@ -19,6 +19,8 @@ class StockBasicOut(BaseModel):
     is_suspended: bool = Field(False, description="是否停牌")
     total_share: Optional[int] = Field(None, description="总股本")
     float_share: Optional[int] = Field(None, description="流通股本")
+    industries: list[str] = Field(default_factory=list, description="所属行业")
+    concepts: list[str] = Field(default_factory=list, description="所属概念")
     updated_at: datetime = Field(..., description="更新时间")
 
     class Config:

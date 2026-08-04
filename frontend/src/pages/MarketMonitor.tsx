@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import {
   Card, Row, Col, Table, Tag, Space, Button, Tabs, Statistic, Badge,
-  Typography, Spin, Segmented, message
+  Typography, Spin, Segmented, message, DatePicker, Progress
 } from 'antd'
+import type { Dayjs } from 'dayjs'
 import {
   AlertOutlined, FundOutlined, RiseOutlined, BarChartOutlined,
   FireOutlined, CheckCircleOutlined
@@ -35,17 +36,23 @@ export default function MarketMonitor() {
   // 资金流
   const [flowPeriod, setFlowPeriod] = useState('today')
   const [flowDirection, setFlowDirection] = useState('inflow')
+  const [flowDate, setFlowDate] = useState<Dayjs>(dayjs())
   const [flowRank, setFlowRank] = useState<any[]>([])
   const [sectorFlow, setSectorFlow] = useState<any[]>([])
+  const [sectorFlowType, setSectorFlowType] = useState('concept')
   const [flowOverview, setFlowOverview] = useState<any>(null)
 
   // 龙虎榜
   const [lhbDirection, setLhbDirection] = useState('all')
+  const [lhbDate, setLhbDate] = useState<Dayjs>(dayjs())
   const [lhbList, setLhbList] = useState<any[]>([])
 
   // 形态
   const [patternStats, setPatternStats] = useState<any[]>([])
   const [scanning, setScanning] = useState(false)
+  const [scanProgress, setScanProgress] = useState<{ total: number; processed: number }>({ total: 0, processed: 0 })
+  const [scanResults, setScanResults] = useState<any[]>([])
+  const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const loadSignals = async () => {
     try {
@@ -81,10 +88,11 @@ export default function MarketMonitor() {
   const loadMoneyFlow = async () => {
     setLoading(true)
     try {
+      const dateStr = flowDate.format('YYYY-MM-DD')
       const [rankRes, sectorRes, overviewRes] = await Promise.all([
-        moneyflowApi.rank({ period: flowPeriod, direction: flowDirection, limit: 20 }),
-        moneyflowApi.sector({ sector_type: 'concept', limit: 20 }),
-        moneyflowApi.overview()
+        moneyflowApi.rank({ period: flowPeriod, direction: flowDirection, limit: 20, date: dateStr }),
+        moneyflowApi.sector({ sector_type: sectorFlowType, limit: 20, date: dateStr }),
+        moneyflowApi.overview({ date: dateStr })
       ])
       setFlowRank(rankRes.data.items || [])
       setSectorFlow(sectorRes.data.items || [])
@@ -99,7 +107,7 @@ export default function MarketMonitor() {
   const loadLHB = async () => {
     setLoading(true)
     try {
-      const res = await lhbApi.today({ direction: lhbDirection, limit: 50 })
+      const res = await lhbApi.today({ direction: lhbDirection, limit: 50, date: lhbDate.format('YYYY-MM-DD') })
       setLhbList(res.data.items || [])
     } catch (error) {
       console.error('加载龙虎榜失败:', error)
@@ -122,15 +130,53 @@ export default function MarketMonitor() {
 
   const scanPatterns = async () => {
     setScanning(true)
+    setScanProgress({ total: 0, processed: 0 })
+    setScanResults([])
     try {
-      await patternsApi.scan({ patterns: ['ma5_above_ma10', 'price_above_ma20', 'volume_surge', 'golden_cross'], market: 'all', limit: 50 })
-      message.success('形态扫描已触发')
+      const res = await patternsApi.scan({
+        patterns: ['ma5_above_ma10', 'price_above_ma20', 'volume_surge', 'golden_cross'],
+        market: 'all',
+        limit: 50
+      })
+      const taskId = res.data.task_id
+      if (!taskId) {
+        message.info('扫描结果为空或已同步返回')
+        setScanning(false)
+        return
+      }
+      message.success('形态扫描任务已提交')
+
+      if (scanTimerRef.current) clearInterval(scanTimerRef.current)
+      scanTimerRef.current = setInterval(async () => {
+        try {
+          const statusRes = await patternsApi.getTask(taskId)
+          const data = statusRes.data
+          setScanProgress(data.progress || { total: 0, processed: 0 })
+          if (data.status === 'done') {
+            if (scanTimerRef.current) clearInterval(scanTimerRef.current)
+            setScanResults(data.items || [])
+            setScanning(false)
+            message.success(`形态扫描完成，共匹配 ${data.total} 只股票`)
+          } else if (data.status === 'failed') {
+            if (scanTimerRef.current) clearInterval(scanTimerRef.current)
+            setScanning(false)
+            message.error(`形态扫描失败: ${data.error || '未知错误'}`)
+          }
+        } catch (error) {
+          console.error('轮询扫描任务失败:', error)
+        }
+      }, 2000)
     } catch (error) {
       message.error('形态扫描失败')
-    } finally {
       setScanning(false)
     }
   }
+
+  useEffect(() => {
+    return () => {
+      if (scanTimerRef.current) clearInterval(scanTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     loadSignals()
@@ -140,7 +186,7 @@ export default function MarketMonitor() {
     if (activeTab === 'moneyflow') loadMoneyFlow()
     if (activeTab === 'lhb') loadLHB()
     if (activeTab === 'patterns') loadPatterns()
-  }, [activeTab, flowPeriod, flowDirection, lhbDirection])
+  }, [activeTab, flowPeriod, flowDirection, flowDate, sectorFlowType, lhbDirection, lhbDate])
 
   const signalColumns: ColumnsType<Signal> = [
     {
@@ -234,6 +280,27 @@ export default function MarketMonitor() {
     { title: '平均置信度', dataIndex: 'avg_confidence', render: (v: number) => `${(v * 100).toFixed(0)}%` }
   ]
 
+  const scanResultColumns = [
+    { title: '股票', dataIndex: 'name', render: (name: string, r: any) => `${name || ''}(${r.code})` },
+    { title: '现价', dataIndex: 'price', render: (v: number) => v?.toFixed(2) },
+    {
+      title: '涨跌幅',
+      dataIndex: 'change_pct',
+      render: (v: number) => <Tag color={v >= 0 ? 'red' : 'green'}>{v >= 0 ? '+' : ''}{v?.toFixed(2)}%</Tag>
+    },
+    { title: '形态', dataIndex: 'match_type' },
+    {
+      title: '置信度',
+      dataIndex: 'confidence',
+      render: (v: number) => `${(v * 100).toFixed(0)}%`
+    },
+    {
+      title: '信号',
+      dataIndex: 'signal',
+      render: (v: string) => <Tag color={v === 'buy' ? 'red' : v === 'sell' ? 'green' : 'default'}>{v}</Tag>
+    }
+  ]
+
   return (
     <div>
       <Title level={4}><AlertOutlined /> 市场监控</Title>
@@ -297,6 +364,7 @@ export default function MarketMonitor() {
                       title="个股主力净流入排名"
                       extra={
                         <Space>
+                          <DatePicker value={flowDate} onChange={(d) => d && setFlowDate(d)} allowClear={false} />
                           <Segmented value={flowPeriod} onChange={(v) => setFlowPeriod(v as string)} options={[{ label: '今日', value: 'today' }, { label: '3日', value: '3d' }, { label: '5日', value: '5d' }]} />
                           <Segmented value={flowDirection} onChange={(v) => setFlowDirection(v as string)} options={[{ label: '流入', value: 'inflow' }, { label: '流出', value: 'outflow' }]} />
                           <Button size="small" onClick={loadMoneyFlow}>刷新</Button>
@@ -308,8 +376,13 @@ export default function MarketMonitor() {
                   </Col>
                   <Col span={10}>
                     <Card
-                      title="概念板块资金流向"
-                      extra={<Button size="small" onClick={loadMoneyFlow}>刷新</Button>}
+                      title="板块资金流向"
+                      extra={
+                        <Space>
+                          <Segmented value={sectorFlowType} onChange={(v) => setSectorFlowType(v as string)} options={[{ label: '概念', value: 'concept' }, { label: '行业', value: 'industry' }]} />
+                          <Button size="small" onClick={loadMoneyFlow}>刷新</Button>
+                        </Space>
+                      }
                     >
                       <Table columns={sectorFlowColumns} dataSource={sectorFlow} rowKey="code" size="small" pagination={{ pageSize: 10 }} />
                     </Card>
@@ -324,9 +397,10 @@ export default function MarketMonitor() {
             children: (
               <Spin spinning={loading}>
                 <Card
-                  title="今日龙虎榜"
+                  title={`龙虎榜 (${lhbDate.format('YYYY-MM-DD')})`}
                   extra={
                     <Space>
+                      <DatePicker value={lhbDate} onChange={(d) => d && setLhbDate(d)} allowClear={false} />
                       <Segmented value={lhbDirection} onChange={(v) => setLhbDirection(v as string)} options={[{ label: '全部', value: 'all' }, { label: '买方主导', value: 'buy' }, { label: '卖方主导', value: 'sell' }]} />
                       <Button size="small" onClick={loadLHB}>刷新</Button>
                     </Space>
@@ -351,7 +425,23 @@ export default function MarketMonitor() {
                     </Space>
                   }
                 >
+                  {scanning && scanProgress.total > 0 && (
+                    <div style={{ marginBottom: 16 }}>
+                      <Progress
+                        percent={Math.round((scanProgress.processed / scanProgress.total) * 100)}
+                        status="active"
+                        format={() => `${scanProgress.processed} / ${scanProgress.total}`}
+                      />
+                    </div>
+                  )}
                   <Table columns={patternColumns} dataSource={patternStats} rowKey="pattern" size="small" pagination={{ pageSize: 10 }} />
+                  {scanResults.length > 0 && (
+                    <div style={{ marginTop: 16 }}>
+                      <Card title="本次扫描结果" size="small">
+                        <Table columns={scanResultColumns} dataSource={scanResults} rowKey={(r) => `${r.code}-${r.match_type}`} size="small" pagination={{ pageSize: 10 }} />
+                      </Card>
+                    </div>
+                  )}
                 </Card>
               </Spin>
             )

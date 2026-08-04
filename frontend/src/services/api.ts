@@ -122,6 +122,8 @@ export const stockPoolApi = {
   updatePool: (id: number, data: any) => api.patch(`/stock-pool/${id}`, data),
   deletePool: (id: number) => api.delete(`/stock-pool/${id}`),
   list: (params?: any) => api.get('/stock-pool/list', { params }),
+  industries: () => api.get('/stock-pool/industries'),
+  concepts: () => api.get('/stock-pool/concepts'),
   poolStocks: (id: number, params?: any) => api.get(`/stock-pool/${id}/items`, { params }),
   addToPool: (id: number, data: { codes: string[] }) => api.post(`/stock-pool/${id}/add`, { stock_code: data.codes[0] }),
   removeFromPool: (id: number, code: string) => api.post(`/stock-pool/${id}/remove`, { codes: [code] }),
@@ -146,7 +148,7 @@ export const moneyflowApi = {
   rank: (params?: any) => api.get('/moneyflow/rank', { params }),
   stock: (code: string) => api.get(`/moneyflow/stock/${code}`),
   sector: (params?: any) => api.get('/moneyflow/sector', { params }),
-  overview: () => api.get('/moneyflow/overview'),
+  overview: (params?: any) => api.get('/moneyflow/overview', { params }),
 }
 
 // 龙虎榜 API
@@ -160,6 +162,7 @@ export const lhbApi = {
 // 形态扫描 API
 export const patternsApi = {
   scan: (data: any, params?: any) => api.post('/patterns/scan', data, { params }),
+  getTask: (taskId: string) => api.get(`/patterns/scan/${taskId}`),
   stats: (params?: any) => api.get('/patterns/stats', { params }),
   defs: () => api.get('/patterns/defs'),
   stock: (code: string, params?: any) => api.get(`/patterns/stock/${code}`, { params }),

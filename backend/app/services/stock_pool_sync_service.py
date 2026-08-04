@@ -27,6 +27,9 @@ from app.models.database import async_session_maker
 from app.models.stock import Sector, SectorMember, StockBasic
 
 
+from app.services.sector_sync_service import sector_sync_service
+
+
 # akshare 在并发 thread 下不稳定（同花顺接口的 V8 初始化），用全局锁串行化
 _AK_LOCK = asyncio.Lock()
 
@@ -79,6 +82,7 @@ class StockPoolSyncService:
             await self._sync_sectors()
             await self._sync_stocks()
             await self._sync_sector_members_placeholder()
+            await sector_sync_service.sync_all()
 
             self._progress["status"] = "done"
             self._progress["finished_at"] = datetime.utcnow().isoformat()

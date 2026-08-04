@@ -1,6 +1,7 @@
 """
 AI Stock - 主应用入口
 """
+from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,7 +21,9 @@ from app.services.guzhang_client import guzhang_client
 from app.services.news_ingest_service import news_ingest_service
 from app.api import news as news_api_module
 
-from app.api import market, portfolio, strategy, order, backtest, news, llm, feishu, datasource, company, monitor, moneyflow, lhb, patterns, stock_pool
+from app.services.precalc_service import precalc_service
+from app.services import moneyflow_service, lhb_service
+from app.api import market, portfolio, strategy, order, backtest, news, llm, feishu, datasource, company, monitor, moneyflow, lhb, patterns, stock_pool, precalc
 from app.api import settings as settings_api
 
 
@@ -70,13 +73,32 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"新闻 Ingest 服务启动失败: {e}")
 
-    logger.info("AI Stock 系统启动完成!")
-    logger.info(f"API文档地址: http://localhost:8000/docs")
+    # 启动市场数据预热服务
+    try:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        precalc_service.register("moneyflow_rank_inflow", lambda: moneyflow_service.get_money_flow_rank(period="today", direction="inflow", limit=100, date=today_str))
+        precalc_service.register("moneyflow_rank_outflow", lambda: moneyflow_service.get_money_flow_rank(period="today", direction="outflow", limit=100, date=today_str))
+        precalc_service.register("moneyflow_sector_concept", lambda: moneyflow_service.get_sector_money_flow(sector_type="concept", limit=50, date=today_str))
+        precalc_service.register("moneyflow_sector_industry", lambda: moneyflow_service.get_sector_money_flow(sector_type="industry", limit=50, date=today_str))
+        precalc_service.register("moneyflow_overview", lambda: moneyflow_service.get_market_flow_overview(date=today_str))
+        precalc_service.register("lhb_today_all", lambda: lhb_service.get_today_lhb(limit=100, direction="all", date=today_str))
+        precalc_service.register("lhb_today_buy", lambda: lhb_service.get_today_lhb(limit=100, direction="buy", date=today_str))
+        precalc_service.register("lhb_today_sell", lambda: lhb_service.get_today_lhb(limit=100, direction="sell", date=today_str))
+        precalc_service.register("lhb_stats_daily", lambda: lhb_service.get_lhb_daily_stats(days=5))
+        precalc_service.start()
+        logger.info("市场数据预热服务已启动")
+    except Exception as e:
+        logger.warning(f"市场数据预热服务启动失败: {e}")
 
     yield
 
     # 关闭
     logger.info("AI Stock 系统关闭...")
+    try:
+        await precalc_service.stop()
+        logger.info("市场数据预热服务已关闭")
+    except Exception as e:
+        logger.warning(f"市场数据预热服务关闭异常: {e}")
     await close_postgres()
     await close_mongodb()
     await close_redis()
@@ -137,6 +159,7 @@ app.include_router(moneyflow.router, prefix="/api")
 app.include_router(lhb.router, prefix="/api")
 app.include_router(patterns.router, prefix="/api")
 app.include_router(stock_pool.router, prefix="/api")
+app.include_router(precalc.router, prefix="/api")
 app.include_router(settings_api.router, prefix="/api")
 
 

@@ -77,6 +77,15 @@ class SyncProgressOut(BaseModel):
     error: Optional[str] = None
 
 
+class StockSectorsOut(BaseModel):
+    """股票所属板块输出"""
+
+    code: str
+    name: str
+    industries: list[str]
+    concepts: list[str]
+
+
 # ========== 行业/概念板块查询 ==========
 
 @router.get("/industries", response_model=list[IndustryNode])
@@ -143,7 +152,7 @@ async def list_stocks(
     concept_code: Optional[str] = Query(None, description="概念板块代码"),
     keyword: Optional[str] = Query(None, description="代码/名称关键字"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    page_size: int = Query(50, ge=1, le=1000),
     session: AsyncSession = Depends(get_db),
 ):
     """股票列表，支持按池/行业/概念筛选（优先级：pool_id > industry_code > concept_code）"""
@@ -176,7 +185,7 @@ async def list_stocks(
         return {"total": total, "page": page, "page_size": page_size, "items": items}
 
     # 按行业筛选
-    if industry_code:
+    if industry_code and industry_code != "all":
         sector = await session.get(Sector, industry_code)
         if not sector:
             raise HTTPException(status_code=404, detail="行业板块不存在")
@@ -215,7 +224,7 @@ async def list_stocks(
         return {"total": total, "page": page, "page_size": page_size, "items": items}
 
     # 按概念筛选
-    if concept_code:
+    if concept_code and concept_code != "all":
         sector = await session.get(Sector, concept_code)
         if not sector:
             raise HTTPException(status_code=404, detail="概念板块不存在")
@@ -271,9 +280,58 @@ async def list_stocks(
 
     stmt = stmt.order_by(StockBasic.code).offset((page - 1) * page_size).limit(page_size)
     result = await session.execute(stmt)
-    items = [StockBasicOut.model_validate(row) for row in result.scalars().all()]
+    rows = result.scalars().all()
+
+    # 批量获取当前页股票的行业/概念
+    stock_codes = [r.code for r in rows]
+    sector_map = {}
+    if stock_codes:
+        sector_result = await session.execute(
+            select(SectorMember.stock_code, Sector.name, Sector.type)
+            .join(Sector, Sector.code == SectorMember.sector_code)
+            .where(SectorMember.stock_code.in_(stock_codes))
+            .order_by(Sector.type, Sector.name)
+        )
+        for scode, sname, stype in sector_result.all():
+            sector_map.setdefault(scode, {"industries": [], "concepts": []})
+            if stype == "industry":
+                sector_map[scode]["industries"].append(sname)
+            elif stype == "concept":
+                sector_map[scode]["concepts"].append(sname)
+
+    items = []
+    for row in rows:
+        data = StockBasicOut.model_validate(row).model_dump()
+        data.update(sector_map.get(row.code, {"industries": [], "concepts": []}))
+        items.append(StockBasicOut(**data))
 
     return {"total": total, "page": page, "page_size": page_size, "items": items}
+
+
+@router.get("/stock/{code}/sectors", response_model=StockSectorsOut)
+async def get_stock_sectors(code: str, session: AsyncSession = Depends(get_db)):
+    """获取股票所属的行业/概念板块列表"""
+    stock = await session.get(StockBasic, code)
+    if not stock:
+        raise HTTPException(status_code=404, detail="股票不存在")
+
+    result = await session.execute(
+        select(Sector)
+        .join(SectorMember, SectorMember.sector_code == Sector.code)
+        .where(SectorMember.stock_code == code)
+        .order_by(Sector.type, Sector.name)
+    )
+    sectors = result.scalars().all()
+
+    industries = [s.name for s in sectors if s.type == "industry"]
+    concepts = [s.name for s in sectors if s.type == "concept"]
+
+    return StockSectorsOut(
+        code=stock.code,
+        name=stock.name,
+        industries=industries,
+        concepts=concepts,
+    )
 
 
 # ========== 自定义股票池 CRUD ==========
@@ -431,7 +489,7 @@ async def get_pool_items(
     pool_id: int,
     keyword: Optional[str] = Query(None, description="代码/名称关键字"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    page_size: int = Query(50, ge=1, le=1000),
     session: AsyncSession = Depends(get_db),
 ):
     """获取池内股票列表"""
@@ -508,7 +566,7 @@ async def add_to_pool(
     item = StockPoolItem(
         pool_id=pool_id,
         stock_code=body.stock_code,
-        note=body.note,
+        note=body.added_reason,
     )
     session.add(item)
     await session.commit()
