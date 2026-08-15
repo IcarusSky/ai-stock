@@ -52,6 +52,7 @@ export default function MarketMonitor() {
   const [scanning, setScanning] = useState(false)
   const [scanProgress, setScanProgress] = useState<{ total: number; processed: number }>({ total: 0, processed: 0 })
   const [scanResults, setScanResults] = useState<any[]>([])
+  const [scanMeta, setScanMeta] = useState<{ updated_at?: string; precomputed?: boolean }>({})
   const scanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const loadSignals = async () => {
@@ -81,7 +82,7 @@ export default function MarketMonitor() {
       await monitorApi.markAllRead()
       loadSignals()
     } catch (error) {
-      message.error('标记已读失败')
+      message.error('全部已读失败')
     }
   }
 
@@ -97,6 +98,9 @@ export default function MarketMonitor() {
       setFlowRank(rankRes.data.items || [])
       setSectorFlow(sectorRes.data.items || [])
       setFlowOverview(overviewRes.data)
+      if (rankRes.data.message && !(rankRes.data.items || []).length) {
+        message.info(rankRes.data.message)
+      }
     } catch (error) {
       console.error('加载资金流失败:', error)
     } finally {
@@ -119,8 +123,16 @@ export default function MarketMonitor() {
   const loadPatterns = async () => {
     setLoading(true)
     try {
-      const res = await patternsApi.stats({ limit: 200 })
-      setPatternStats(res.data.items || [])
+      // 统计数据与每日预计算扫描结果都是后台算好的缓存，秒开
+      const [statsRes, latestRes] = await Promise.all([
+        patternsApi.stats({ limit: 200 }),
+        patternsApi.latestScan()
+      ])
+      setPatternStats(statsRes.data.items || [])
+      if (latestRes.data?.status === 'ok') {
+        setScanResults(latestRes.data.items || [])
+        setScanMeta({ updated_at: latestRes.data.updated_at, precomputed: true })
+      }
     } catch (error) {
       console.error('加载形态统计失败:', error)
     } finally {
@@ -155,6 +167,7 @@ export default function MarketMonitor() {
           if (data.status === 'done') {
             if (scanTimerRef.current) clearInterval(scanTimerRef.current)
             setScanResults(data.items || [])
+            setScanMeta({ updated_at: data.updated_at, precomputed: false })
             setScanning(false)
             message.success(`形态扫描完成，共匹配 ${data.total} 只股票`)
           } else if (data.status === 'failed') {
@@ -365,7 +378,7 @@ export default function MarketMonitor() {
                       extra={
                         <Space>
                           <DatePicker value={flowDate} onChange={(d) => d && setFlowDate(d)} allowClear={false} />
-                          <Segmented value={flowPeriod} onChange={(v) => setFlowPeriod(v as string)} options={[{ label: '今日', value: 'today' }, { label: '3日', value: '3d' }, { label: '5日', value: '5d' }]} />
+                          <Segmented value={flowPeriod} onChange={(v) => setFlowPeriod(v as string)} options={[{ label: '今日', value: 'today' }, { label: '3日', value: '3d' }, { label: '5日', value: '5d' }, { label: '10日', value: '10d' }, { label: '20日', value: '20d' }]} />
                           <Segmented value={flowDirection} onChange={(v) => setFlowDirection(v as string)} options={[{ label: '流入', value: 'inflow' }, { label: '流出', value: 'outflow' }]} />
                           <Button size="small" onClick={loadMoneyFlow}>刷新</Button>
                         </Space>
@@ -437,7 +450,12 @@ export default function MarketMonitor() {
                   <Table columns={patternColumns} dataSource={patternStats} rowKey="pattern" size="small" pagination={{ pageSize: 10 }} />
                   {scanResults.length > 0 && (
                     <div style={{ marginTop: 16 }}>
-                      <Card title="本次扫描结果" size="small">
+                      <Card
+                        title={scanMeta.precomputed
+                          ? `每日预计算扫描结果（更新于 ${scanMeta.updated_at || '-'}）`
+                          : '本次扫描结果'}
+                        size="small"
+                      >
                         <Table columns={scanResultColumns} dataSource={scanResults} rowKey={(r) => `${r.code}-${r.match_type}`} size="small" pagination={{ pageSize: 10 }} />
                       </Card>
                     </div>
