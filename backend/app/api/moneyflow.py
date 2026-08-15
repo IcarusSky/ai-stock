@@ -47,7 +47,9 @@ class MoneyFlowResponse(BaseModel):
     items: List[MoneyFlowRankItem]
     total: int
     period: str
+    date: Optional[str] = None
     updated_at: str
+    message: Optional[str] = None
 
 
 class SectorFlowItem(BaseModel):
@@ -62,15 +64,17 @@ class SectorFlowResponse(BaseModel):
     items: List[SectorFlowItem]
     total: int
     period: str
+    date: Optional[str] = None
     updated_at: str
+    message: Optional[str] = None
 
 
 @router.get("/rank", response_model=MoneyFlowResponse)
 async def get_money_flow_rank(
-    period: str = Query("today", description="today | 3d | 5d（同花顺接口仅提供即时/历史某日，3d/5d 当前回退到即时）"),
+    period: str = Query("today", description="today | 3d | 5d | 10d | 20d（同花顺排行周期）"),
     limit: int = Query(100, ge=1, le=500),
     direction: str = Query("inflow", description="inflow | outflow 主力流入/流出"),
-    date: Optional[str] = Query(None, description="日期 YYYY-MM-DD，为空则取今天"),
+    date: Optional[str] = Query(None, description="日期 YYYY-MM-DD，为空则取今天；历史日期读取系统每日积累的快照"),
 ):
     """主力资金流排名（同花顺数据源）"""
     try:

@@ -13,6 +13,7 @@ AI Stock - 股票池同步服务
 - 东财 push2 在当前网络下 TLS 断连不可用
 """
 import asyncio
+import re
 from datetime import datetime
 from typing import Any, Optional
 
@@ -181,27 +182,24 @@ class StockPoolSyncService:
         await session.commit()
 
     async def _sync_stocks(self):
-        """同步全市场股票（新浪数据源）"""
-        logger.info("开始同步全市场股票（新浪）...")
+        """同步全市场股票（多数据源合并，确保覆盖沪深京全量 A 股）
+
+        单一数据源覆盖不全的问题：
+        - 新浪 stock_zh_a_spot 偶尔缺北交所/新上市股票
+        - 东财 stock_zh_a_spot_em 在部分网络下 TLS 断连不可用
+        因此按 新浪 -> 东财 -> 交易所代码表 的顺序合并去重，能取到几个用几个。
+        """
+        logger.info("开始同步全市场股票（多源合并）...")
         step = {"step": "stocks", "count": 0, "message": ""}
 
         try:
-            df = await _run_ak_sync(ak.stock_zh_a_spot)
-            if df is None or df.empty:
-                raise ValueError("ak.stock_zh_a_spot 返回空数据")
-
-            df = df.copy()
-            df["code_str"] = df["代码"].astype(str).str.replace(r"^(sh|sz|bj)", "", regex=True)
-            df["price_f"] = pd.to_numeric(df["最新价"], errors="coerce")
+            merged = await self._fetch_all_a_shares()
+            if not merged:
+                raise ValueError("所有股票列表数据源均不可用")
 
             rows = []
             now = datetime.utcnow()
-            for _, row in df.iterrows():
-                code = str(row.get("code_str", "")).strip()
-                name = str(row.get("名称", "")).strip()
-                if not code or not name:
-                    continue
-
+            for code, name in merged.items():
                 rows.append({
                     "code": code,
                     "name": name,
@@ -227,6 +225,51 @@ class StockPoolSyncService:
             step["count"] = 0
 
         self._progress["steps"].append(step)
+
+    async def _fetch_all_a_shares(self) -> dict[str, str]:
+        """多数据源合并全市场 A 股 {code: name}，按 6 位代码去重"""
+        merged: dict[str, str] = {}
+
+        def _add(code: Any, name: Any):
+            code = str(code or "").strip()
+            name = str(name or "").strip()
+            if not re.match(r"^\d{6}$", code) or not name:
+                return
+            if code not in merged:
+                merged[code] = name
+
+        # 数据源 1：新浪全市场快照（代码带 sh/sz/bj 前缀）
+        try:
+            df = await _run_ak_sync(ak.stock_zh_a_spot)
+            if df is not None and not df.empty:
+                codes = df["代码"].astype(str).str.replace(r"^(sh|sz|bj)", "", regex=True)
+                for c, n in zip(codes, df["名称"].astype(str)):
+                    _add(c, n)
+                logger.info(f"新浪全市场快照获取 {len(df)} 条，合并后 {len(merged)} 条")
+        except Exception as e:
+            logger.warning(f"新浪全市场快照获取失败: {e}")
+
+        # 数据源 2：东财全市场快照（部分网络不可用，失败可忽略）
+        try:
+            df_em = await _run_ak_sync(ak.stock_zh_a_spot_em)
+            if df_em is not None and not df_em.empty:
+                for c, n in zip(df_em["代码"].astype(str), df_em["名称"].astype(str)):
+                    _add(c, n)
+                logger.info(f"东财全市场快照获取 {len(df_em)} 条，合并后 {len(merged)} 条")
+        except Exception as e:
+            logger.warning(f"东财全市场快照获取失败（网络受限可忽略）: {e}")
+
+        # 数据源 3：沪深京 A 股代码名称表（兜底补齐缺漏）
+        try:
+            df_info = await _run_ak_sync(ak.stock_info_a_code_name)
+            if df_info is not None and not df_info.empty:
+                for c, n in zip(df_info["code"].astype(str), df_info["name"].astype(str)):
+                    _add(c, n)
+                logger.info(f"交易所代码表获取 {len(df_info)} 条，合并后 {len(merged)} 条")
+        except Exception as e:
+            logger.warning(f"交易所代码表获取失败: {e}")
+
+        return merged
 
     async def _bulk_upsert_stocks(self, session: AsyncSession, rows: list[dict]):
         if not rows:
