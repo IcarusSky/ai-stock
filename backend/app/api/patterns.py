@@ -155,6 +155,24 @@ async def scan_patterns(
     )
 
 
+@router.get("/scan/latest", response_model=dict)
+async def get_latest_scan():
+    """获取最近一次后台预计算的形态扫描结果（秒回）
+
+    每日预热服务会在开盘前/收盘后自动扫描并缓存，前端直接展示缓存结果。
+    若缓存为空（如刚部署未预热），返回 status=empty，前端可引导用户手动触发扫描。
+    """
+    cached = await patterns_service.get_latest_scan()
+    if not cached:
+        return {
+            "status": "empty",
+            "message": "暂无预计算结果，可手动发起全市场扫描或等待每日预热",
+            "items": [],
+            "total": 0,
+        }
+    return {"status": "ok", **cached}
+
+
 @router.get("/scan/{task_id}", response_model=ScanTaskStatus)
 async def get_scan_task(task_id: str):
     """查询扫描任务状态/结果"""
@@ -167,51 +185,19 @@ async def get_scan_task(task_id: str):
 @router.get("/stats", response_model=PatternStatsResponse)
 async def get_pattern_stats(
     limit: int = Query(200, ge=1, le=500),
+    refresh: bool = Query(False, description="强制重新计算（默认读每日预计算缓存，秒回）"),
 ):
-    """全市场形态统计（每种形态当前有多少只股票符合）"""
-    patterns = list(patterns_service.PATTERN_DEFINITIONS.keys())
-    stocks = await patterns_service.fetch_all_stocks()
-    stocks = stocks[:limit]
+    """全市场形态统计（每种形态当前有多少只股票符合）
 
-    stats = {p: {"count": 0, "change_sum": 0.0, "confidence_sum": 0.0} for p in patterns}
+    默认直接返回后台预热服务算好的缓存结果；传 refresh=true 才同步重算（耗时较长）。
+    """
+    if not refresh:
+        cached = await patterns_service.get_precomputed_stats()
+        if cached:
+            return PatternStatsResponse(**cached)
 
-    semaphore = asyncio.Semaphore(10)
-
-    async def scan_one(stock: dict):
-        code = stock["code"]
-        df = await patterns_service.fetch_kline(code, limit=60)
-        if df is None or len(df) < 25:
-            return
-        matches = patterns_service.detect_patterns(df, patterns)
-        for m in matches:
-            p = m["pattern"]
-            stats[p]["count"] += 1
-            stats[p]["confidence_sum"] += m["confidence"]
-            if len(df) >= 2:
-                change = float(df.iloc[-1]["close"]) / float(df.iloc[-2]["close"]) * 100 - 100
-                stats[p]["change_sum"] += change
-
-    tasks = [scan_one(s) for s in stocks]
-    await asyncio.gather(*tasks, return_exceptions=True)
-
-    items = []
-    for p, s in stats.items():
-        count = s["count"]
-        items.append(PatternStatsItem(
-            pattern=p,
-            name=patterns_service.PATTERN_DEFINITIONS[p]["name"],
-            count=count,
-            avg_change_pct=round(s["change_sum"] / count, 2) if count > 0 else 0,
-            avg_confidence=round(s["confidence_sum"] / count, 3) if count > 0 else 0,
-        ))
-
-    items.sort(key=lambda x: x.count, reverse=True)
-
-    return PatternStatsResponse(
-        items=items,
-        total_patterns=len(items),
-        updated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    )
+    result = await patterns_service.precompute_pattern_stats(limit=limit)
+    return PatternStatsResponse(**result)
 
 
 @router.get("/defs", response_model=dict)
