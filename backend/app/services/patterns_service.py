@@ -6,6 +6,7 @@ AI Stock - 形态扫描服务层
 2. 异步任务扫描（全市场 / 大批量），结果写入 Redis 后通过 task_id 查询
 """
 import asyncio
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -14,7 +15,7 @@ import akshare as ak
 import pandas as pd
 from loguru import logger
 
-from app.core.cache import get_cache, set_cache
+from app.core.cache import get_cache, set_cache, ttl_until_tomorrow
 
 
 # ============================================================
@@ -87,22 +88,79 @@ def _normalize_code_for_tx(code: str) -> str:
     return f"sz{code}"
 
 
+_TX_KLINE_DEAD_UNTIL = 0.0  # 腾讯 K 线接口冷却截止时间戳（挂起时避免每只股票都等超时）
+
+
+async def _ak_call_hard_timeout(fn, timeout: float, *args, **kwargs):
+    """带硬超时的 akshare 调用
+
+    注意：直接 wait_for(asyncio.to_thread(...)) 在底层线程已运行时无法真正取消
+    （run_in_executor 的 Future 取消会失败并继续等待），所以这里用 shield 隔离，
+    超时后立即抛出并让调用方继续，后台线程自行结束（结果/异常被丢弃）。
+    """
+    async with _AK_LOCK:
+        loop = asyncio.get_running_loop()
+        fut = loop.run_in_executor(None, lambda: fn(*args, **kwargs))
+        fut.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
+        return await asyncio.wait_for(asyncio.shield(fut), timeout=timeout)
+
+
+async def _fetch_kline_tx(tx_code: str, start_s: str, end_s: str) -> Optional[pd.DataFrame]:
+    """腾讯日 K：持锁后二次确认冷却状态
+
+    全市场扫描时大量协程排队等全局锁，它们越过冷却检查后才拿到锁；
+    若不在锁内复查，每个排队协程都会白等一次 15s 超时。
+    """
+    async with _AK_LOCK:
+        if time.time() < _TX_KLINE_DEAD_UNTIL:
+            return None
+        loop = asyncio.get_running_loop()
+        fut = loop.run_in_executor(
+            None,
+            lambda: ak.stock_zh_a_hist_tx(
+                symbol=tx_code,
+                start_date=start_s,
+                end_date=end_s,
+                adjust="qfq",
+            ),
+        )
+        fut.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
+        return await asyncio.wait_for(asyncio.shield(fut), timeout=15)
+
+
 async def fetch_kline(code: str, limit: int = 120) -> Optional[pd.DataFrame]:
-    """获取股票日 K（腾讯数据源，前复权）"""
+    """获取股票日 K（优先腾讯，超时/失败回退新浪，前复权）
+
+    腾讯 gtimg 接口在部分网络环境会直接挂起而非报错，
+    因此所有调用都带超时；一旦腾讯失败即进入 1 小时冷却，
+    扫描任务整体回退到新浪数据源。
+    """
+    global _TX_KLINE_DEAD_UNTIL
     tx_code = _normalize_code_for_tx(code)
     end = datetime.now()
     start = end - timedelta(days=max(limit * 2, 60))
+    start_s, end_s = start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
 
-    try:
-        df = await _run_ak_sync(
-            ak.stock_zh_a_hist_tx,
-            symbol=tx_code,
-            start_date=start.strftime("%Y%m%d"),
-            end_date=end.strftime("%Y%m%d"),
-            adjust="qfq",
-        )
-    except Exception:
-        return None
+    df = None
+    if time.time() >= _TX_KLINE_DEAD_UNTIL:
+        try:
+            df = await _fetch_kline_tx(tx_code, start_s, end_s)
+        except Exception:
+            df = None
+        if df is None or df.empty:
+            _TX_KLINE_DEAD_UNTIL = time.time() + 3600
+
+    if df is None or df.empty:
+        try:
+            df = await _ak_call_hard_timeout(
+                ak.stock_zh_a_daily, 20,
+                symbol=tx_code,
+                start_date=start_s,
+                end_date=end_s,
+                adjust="qfq",
+            )
+        except Exception:
+            return None
 
     if df is None or df.empty:
         return None
@@ -167,6 +225,7 @@ def detect_patterns(df: pd.DataFrame, patterns: List[str]) -> List[dict]:
     latest_ma20 = df["ma20"].iloc[-1]
     prev_ma5 = df["ma5"].iloc[-2]
     prev_ma10 = df["ma10"].iloc[-2]
+    prev_ma20 = df["ma20"].iloc[-2]
 
     if "ma5_above_ma10" in patterns:
         if pd.notna(latest_ma5) and pd.notna(latest_ma10):
@@ -505,3 +564,97 @@ async def scan_patterns_sync(
         "patterns": patterns,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
+
+
+# ============================================================
+# 每日预计算（供后台预热服务调用，前端直接读缓存秒开）
+# ============================================================
+
+PRECOMPUTE_STATS_KEY = "patterns:stats:daily"
+PRECOMPUTE_SCAN_KEY = "patterns:scan:latest"
+
+# 与前端「全市场扫描」默认形态保持一致
+DEFAULT_SCAN_PATTERNS = ["ma5_above_ma10", "price_above_ma20", "volume_surge", "golden_cross"]
+
+
+async def compute_pattern_stats(limit: int = 200) -> dict:
+    """全市场形态统计计算（逻辑从 /patterns/stats 路由下沉，便于缓存复用）"""
+    patterns = list(PATTERN_DEFINITIONS.keys())
+    stocks = await fetch_all_stocks()
+    stocks = stocks[:limit]
+
+    stats = {p: {"count": 0, "change_sum": 0.0, "confidence_sum": 0.0} for p in patterns}
+
+    semaphore = asyncio.Semaphore(10)
+
+    async def scan_one(stock: dict):
+        async with semaphore:
+            df = await fetch_kline(stock["code"], limit=60)
+            if df is None or len(df) < 25:
+                return
+            matches = detect_patterns(df, patterns)
+            for m in matches:
+                p = m["pattern"]
+                stats[p]["count"] += 1
+                stats[p]["confidence_sum"] += m["confidence"]
+                if len(df) >= 2:
+                    change = float(df.iloc[-1]["close"]) / float(df.iloc[-2]["close"]) * 100 - 100
+                    stats[p]["change_sum"] += change
+
+    await asyncio.gather(*(scan_one(s) for s in stocks), return_exceptions=True)
+
+    items = []
+    for p, s in stats.items():
+        count = s["count"]
+        items.append({
+            "pattern": p,
+            "name": PATTERN_DEFINITIONS[p]["name"],
+            "count": count,
+            "avg_change_pct": round(s["change_sum"] / count, 2) if count > 0 else 0,
+            "avg_confidence": round(s["confidence_sum"] / count, 3) if count > 0 else 0,
+        })
+
+    items.sort(key=lambda x: x["count"], reverse=True)
+
+    return {
+        "items": items,
+        "total_patterns": len(items),
+        "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+
+
+async def precompute_pattern_stats(limit: int = 200) -> dict:
+    """预计算形态统计并写入缓存（按交易日有效）"""
+    result = await compute_pattern_stats(limit=limit)
+    await set_cache(PRECOMPUTE_STATS_KEY, result, expire=ttl_until_tomorrow())
+    logger.info(f"形态统计预计算完成: {result['total_patterns']} 种形态")
+    return result
+
+
+async def get_precomputed_stats() -> Optional[dict]:
+    """读取预计算的形态统计，未预热返回 None"""
+    return await get_cache(PRECOMPUTE_STATS_KEY)
+
+
+async def precompute_default_scan(max_stocks: int = 200, limit: int = 50) -> dict:
+    """预计算默认形态的全市场扫描结果并写入缓存"""
+    result = await scan_patterns_sync(
+        patterns=DEFAULT_SCAN_PATTERNS,
+        market="all",
+        limit=limit,
+        stock_list=None,
+        max_stocks=max_stocks,
+    )
+    payload = {
+        **result,
+        "stocks_scanned": max_stocks,
+        "precomputed": True,
+    }
+    await set_cache(PRECOMPUTE_SCAN_KEY, payload, expire=ttl_until_tomorrow())
+    logger.info(f"默认形态扫描预计算完成: 匹配 {payload['total']} 条")
+    return payload
+
+
+async def get_latest_scan() -> Optional[dict]:
+    """读取最近一次预计算的扫描结果，未预热返回 None"""
+    return await get_cache(PRECOMPUTE_SCAN_KEY)

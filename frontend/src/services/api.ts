@@ -163,6 +163,7 @@ export const lhbApi = {
 export const patternsApi = {
   scan: (data: any, params?: any) => api.post('/patterns/scan', data, { params }),
   getTask: (taskId: string) => api.get(`/patterns/scan/${taskId}`),
+  latestScan: () => api.get('/patterns/scan/latest'),
   stats: (params?: any) => api.get('/patterns/stats', { params }),
   defs: () => api.get('/patterns/defs'),
   stock: (code: string, params?: any) => api.get(`/patterns/stock/${code}`, { params }),

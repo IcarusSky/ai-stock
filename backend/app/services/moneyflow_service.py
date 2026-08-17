@@ -16,6 +16,37 @@ from loguru import logger
 
 from app.core.cache import cache_key, get_cache, set_cache, ttl_until_tomorrow
 
+# 历史快照保留 30 天（收盘后当日数据定格，转为长期快照供历史日期筛选）
+HISTORY_TTL = 30 * 86400
+
+# 同花顺个股资金流接口的 symbol 只支持这几种（不支持任意历史日期）
+_PERIOD_SYMBOL = {
+    "today": "即时",
+    "3d": "3日排行",
+    "5d": "5日排行",
+    "10d": "10日排行",
+    "20d": "20日排行",
+}
+
+# 不同排行周期返回的列名不同
+_PERIOD_COLUMNS = {
+    "即时": {"net": "净额", "pct": "涨跌幅", "turnover": "换手率"},
+    "3日排行": {"net": "资金流入净额", "pct": "阶段涨跌幅", "turnover": "连续换手率"},
+    "5日排行": {"net": "资金流入净额", "pct": "阶段涨跌幅", "turnover": "连续换手率"},
+    "10日排行": {"net": "资金流入净额", "pct": "阶段涨跌幅", "turnover": "连续换手率"},
+    "20日排行": {"net": "资金流入净额", "pct": "阶段涨跌幅", "turnover": "连续换手率"},
+}
+
+
+def _cache_expire(trade_date: str) -> int:
+    """缓存有效期：收盘后（>=15点）的当日数据已定格，转 30 天历史快照；其余到次日"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    if trade_date != today:
+        return HISTORY_TTL
+    if datetime.now().hour >= 15:
+        return HISTORY_TTL
+    return ttl_until_tomorrow()
+
 
 _CN_NUM_RE = re.compile(r"^(-?[\d.]+)(亿|万)?$")
 
@@ -87,15 +118,33 @@ async def get_money_flow_rank(
     limit: int = 100,
     date: Optional[str] = None,
 ) -> dict:
-    """个股主力净流入排名，返回可直接缓存的字典"""
+    """个股主力净流入排名，返回可直接缓存的字典
+
+    日期规则：
+    - 当日：按 period 实时拉取同花顺排行（today/3d/5d/10d/20d 真正生效）
+    - 历史日期：同花顺不提供任意历史资金流，仅返回系统每日积累的历史快照；
+      无快照时返回空列表并在 message 中说明，不报错
+    """
     trade_date = date or datetime.now().strftime("%Y-%m-%d")
+    is_today = trade_date == datetime.now().strftime("%Y-%m-%d")
     cache_key_name = cache_key("moneyflow:rank", trade_date, period=period, direction=direction, limit=limit)
 
     cached = await get_cache(cache_key_name)
     if cached:
         return cached
 
-    symbol = "即时" if trade_date == datetime.now().strftime("%Y-%m-%d") else trade_date.replace("-", "")
+    if not is_today:
+        return {
+            "items": [],
+            "total": 0,
+            "period": period,
+            "date": trade_date,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message": "该日期暂无资金流历史快照（历史快照自系统部署后每日收盘自动积累）",
+        }
+
+    symbol = _PERIOD_SYMBOL.get(period, "即时")
+    cols = _PERIOD_COLUMNS[symbol]
     try:
         df = await _run_ak_sync(_fetch_individual_flow, symbol)
     except Exception as e:
@@ -107,16 +156,17 @@ async def get_money_flow_rank(
             "items": [],
             "total": 0,
             "period": period,
+            "date": trade_date,
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
-        await set_cache(cache_key_name, result, expire=ttl_until_tomorrow())
+        await set_cache(cache_key_name, result, expire=_cache_expire(trade_date))
         return result
 
     df = df.copy()
-    df["net"] = df["净额"].apply(_parse_cn_number)
+    df["net"] = df[cols["net"]].apply(_parse_cn_number)
     df["price_f"] = pd.to_numeric(df["最新价"], errors="coerce").fillna(0.0)
-    df["pct_f"] = df["涨跌幅"].apply(_parse_pct)
-    df["turnover"] = df["换手率"].apply(_parse_pct)
+    df["pct_f"] = df[cols["pct"]].apply(_parse_pct)
+    df["turnover"] = df[cols["turnover"]].apply(_parse_pct)
 
     df = df[df["net"] != 0]
     df = df.sort_values("net", ascending=(direction == "outflow"))
@@ -138,9 +188,10 @@ async def get_money_flow_rank(
         "items": items,
         "total": len(items),
         "period": period,
+        "date": trade_date,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    await set_cache(cache_key_name, result, expire=ttl_until_tomorrow())
+    await set_cache(cache_key_name, result, expire=_cache_expire(trade_date))
     return result
 
 
@@ -149,15 +200,26 @@ async def get_sector_money_flow(
     limit: int = 50,
     date: Optional[str] = None,
 ) -> dict:
-    """板块资金流向排名"""
+    """板块资金流向排名（同花顺仅提供当日数据，历史日期读快照）"""
     trade_date = date or datetime.now().strftime("%Y-%m-%d")
+    is_today = trade_date == datetime.now().strftime("%Y-%m-%d")
     cache_key_name = cache_key("moneyflow:sector", trade_date, sector_type=sector_type, limit=limit)
 
     cached = await get_cache(cache_key_name)
     if cached:
         return cached
 
-    symbol = "即时" if trade_date == datetime.now().strftime("%Y-%m-%d") else trade_date.replace("-", "")
+    if not is_today:
+        return {
+            "items": [],
+            "total": 0,
+            "period": "today",
+            "date": trade_date,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message": "该日期暂无板块资金流历史快照（历史快照自系统部署后每日收盘自动积累）",
+        }
+
+    symbol = "即时"
     try:
         df = await _run_ak_sync(_fetch_sector_flow, sector_type, symbol)
     except Exception as e:
@@ -169,9 +231,10 @@ async def get_sector_money_flow(
             "items": [],
             "total": 0,
             "period": "today",
+            "date": trade_date,
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
-        await set_cache(cache_key_name, result, expire=ttl_until_tomorrow())
+        await set_cache(cache_key_name, result, expire=_cache_expire(trade_date))
         return result
 
     df = df.copy()
@@ -194,22 +257,37 @@ async def get_sector_money_flow(
         "items": items,
         "total": len(items),
         "period": "today",
+        "date": trade_date,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    await set_cache(cache_key_name, result, expire=ttl_until_tomorrow())
+    await set_cache(cache_key_name, result, expire=_cache_expire(trade_date))
     return result
 
 
 async def get_market_flow_overview(date: Optional[str] = None) -> dict:
-    """市场整体资金流概览"""
+    """市场整体资金流概览（同花顺仅提供当日数据，历史日期读快照）"""
     trade_date = date or datetime.now().strftime("%Y-%m-%d")
+    is_today = trade_date == datetime.now().strftime("%Y-%m-%d")
     cache_key_name = cache_key("moneyflow:overview", trade_date)
 
     cached = await get_cache(cache_key_name)
     if cached:
         return cached
 
-    symbol = "即时" if trade_date == datetime.now().strftime("%Y-%m-%d") else trade_date.replace("-", "")
+    if not is_today:
+        return {
+            "total_stocks": 0,
+            "inflow_count": 0,
+            "outflow_count": 0,
+            "total_main_inflow": 0.0,
+            "total_main_outflow": 0.0,
+            "net_flow": 0.0,
+            "date": trade_date,
+            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "message": "该日期暂无资金流历史快照（历史快照自系统部署后每日收盘自动积累）",
+        }
+
+    symbol = "即时"
     try:
         df = await _run_ak_sync(_fetch_individual_flow, symbol)
     except Exception as e:
@@ -224,9 +302,10 @@ async def get_market_flow_overview(date: Optional[str] = None) -> dict:
             "total_main_inflow": 0.0,
             "total_main_outflow": 0.0,
             "net_flow": 0.0,
+            "date": trade_date,
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
-        await set_cache(cache_key_name, result, expire=ttl_until_tomorrow())
+        await set_cache(cache_key_name, result, expire=_cache_expire(trade_date))
         return result
 
     df = df.copy()
@@ -241,7 +320,8 @@ async def get_market_flow_overview(date: Optional[str] = None) -> dict:
         "total_main_inflow": float(inflow),
         "total_main_outflow": float(abs(outflow)),
         "net_flow": float(inflow + outflow),
+        "date": trade_date,
         "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
-    await set_cache(cache_key_name, result, expire=ttl_until_tomorrow())
+    await set_cache(cache_key_name, result, expire=_cache_expire(trade_date))
     return result

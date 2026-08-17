@@ -22,7 +22,7 @@ from app.services.news_ingest_service import news_ingest_service
 from app.api import news as news_api_module
 
 from app.services.precalc_service import precalc_service
-from app.services import moneyflow_service, lhb_service
+from app.services import moneyflow_service, lhb_service, patterns_service
 from app.api import market, portfolio, strategy, order, backtest, news, llm, feishu, datasource, company, monitor, moneyflow, lhb, patterns, stock_pool, precalc
 from app.api import settings as settings_api
 
@@ -85,6 +85,9 @@ async def lifespan(app: FastAPI):
         precalc_service.register("lhb_today_buy", lambda: lhb_service.get_today_lhb(limit=100, direction="buy", date=today_str))
         precalc_service.register("lhb_today_sell", lambda: lhb_service.get_today_lhb(limit=100, direction="sell", date=today_str))
         precalc_service.register("lhb_stats_daily", lambda: lhb_service.get_lhb_daily_stats(days=5))
+        # 形态扫描耗时最长（全市场 K 线逐只拉取），同样纳入每日预热
+        precalc_service.register("patterns_stats", lambda: patterns_service.precompute_pattern_stats(limit=200))
+        precalc_service.register("patterns_scan_default", lambda: patterns_service.precompute_default_scan(max_stocks=200, limit=50))
         precalc_service.start()
         logger.info("市场数据预热服务已启动")
     except Exception as e:
